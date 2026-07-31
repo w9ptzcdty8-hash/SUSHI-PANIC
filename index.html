@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>寿司ブレイン</title>
+    <title>寿司パニック</title>
     <style>
         * {
             box-sizing: border-box;
@@ -52,40 +52,36 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // レスポンシブ対応の仮想解像度
+        // Virtual resolution
         const VIRTUAL_WIDTH = 480;
         const VIRTUAL_HEIGHT = 854;
-        let scale = 1;
 
         function resizeCanvas() {
-            const container = document.getElementById('game-container');
-            const w = container.clientWidth;
-            const h = container.clientHeight;
-            
             canvas.width = VIRTUAL_WIDTH;
             canvas.height = VIRTUAL_HEIGHT;
-            scale = Math.min(w / VIRTUAL_WIDTH, h / VIRTUAL_HEIGHT);
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // ゲーム状態
-        let gameState = 'TITLE'; // TITLE, PLAY, GAMEOVER
-        let selectedDifficulty = 'EASY'; // EASY, NORMAL (準備中)
+        // Game state (TITLE, PLAY, PAUSE, GAMEOVER)
+        let gameState = 'TITLE';
+        let selectedDifficulty = 'EASY';
         let score = 0;
         let customers = [];
-        let maxCustomers = 1; // EASYモードでは常に1人
-        let spawnTimer = 0;
+        let maxCustomers = 1;
         let gameTime = 0;
+        let servedCount = 0;
+        let toastMessage = "";
+        let toastTimer = 0;
 
-        // 調理ステーションの状態
+        // Cooking station state
         let stagedRice = false;
         let stagedNori = false;
-        let stagedTopping = null; // 'maguro', 'salmon', 'tamago', 'ebi', 'ikura'
+        let stagedTopping = null;
         let isCut = false;
         let hasWasabi = false;
 
-        // ネタ定義
+        // Toppings definition
         const TOPPINGS = {
             maguro: { name: 'マグロ', color: '#e74c3c', type: 'nigiri', price: 500 },
             salmon: { name: 'サーモン', color: '#e67e22', type: 'nigiri', price: 600 },
@@ -94,7 +90,7 @@
             ikura: { name: 'イクラ', color: '#fab1a0', type: 'gunkan', price: 800 }
         };
 
-        // サウンド（Web Audio API）
+        // Web Audio API
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playSound(type) {
             if (audioCtx.state === 'suspended') {
@@ -114,8 +110,8 @@
                 osc.start(now);
                 osc.stop(now + 0.05);
             } else if (type === 'success') {
-                osc.frequency.setValueAtTime(523.25, now); // C5
-                osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.setValueAtTime(659.25, now + 0.08);
                 gain.gain.setValueAtTime(0.15, now);
                 gain.gain.linearRampToValueAtTime(0, now + 0.2);
                 osc.start(now);
@@ -130,7 +126,65 @@
             }
         }
 
-        // 入力処理（タッチ＆クリック対応）
+        function showToast(msg) {
+            toastMessage = msg;
+            toastTimer = 2.0;
+        }
+
+        // Generate Debug Data JSON
+        function copyDebugLogToClipboard() {
+            const debugData = {
+                timestamp: new Date().toISOString(),
+                gameState: gameState,
+                selectedDifficulty: selectedDifficulty,
+                score: score,
+                servedCount: servedCount,
+                gameTimeSeconds: Math.floor(gameTime),
+                kitchenState: {
+                    stagedRice: stagedRice,
+                    stagedNori: stagedNori,
+                    stagedTopping: stagedTopping,
+                    isCut: isCut,
+                    hasWasabi: hasWasabi
+                },
+                customers: customers,
+                canvasSize: {
+                    virtualWidth: VIRTUAL_WIDTH,
+                    virtualHeight: VIRTUAL_HEIGHT,
+                    actualWidth: canvas.getBoundingClientRect().width,
+                    actualHeight: canvas.getBoundingClientRect().height
+                },
+                userAgent: navigator.userAgent
+            };
+
+            const logDataStr = JSON.stringify(debugData, null, 2);
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(logDataStr).then(() => {
+                    showToast("デバッグログをコピーしました！");
+                }).catch(() => {
+                    fallbackCopy(logDataStr);
+                });
+            } else {
+                fallbackCopy(logDataStr);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast("デバッグログをコピーしました！");
+            } catch (err) {
+                showToast("コピーに失敗しました");
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // Input Handling
         function handleTouch(x, y) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = VIRTUAL_WIDTH / rect.width;
@@ -139,16 +193,34 @@
             const vy = (y - rect.top) * scaleY;
 
             if (gameState === 'TITLE') {
-                // EASYモードボタン
                 if (vy > 420 && vy < 500 && vx > 100 && vx < 380) {
                     selectedDifficulty = 'EASY';
                     maxCustomers = 1;
                     startGame();
                     playSound('tap');
-                }
-                // NORMALモードボタン（選択不可・準備中）
-                else if (vy > 520 && vy < 600 && vx > 100 && vx < 380) {
+                } else if (vy > 520 && vy < 600 && vx > 100 && vx < 380) {
                     playSound('error');
+                }
+            } else if (gameState === 'PAUSE') {
+                // Resume
+                if (vy > 330 && vy < 390 && vx > 100 && vx < 380) {
+                    gameState = 'PLAY';
+                    playSound('tap');
+                }
+                // Retry
+                else if (vy > 410 && vy < 470 && vx > 100 && vx < 380) {
+                    startGame();
+                    playSound('tap');
+                }
+                // Title
+                else if (vy > 490 && vy < 550 && vx > 100 && vx < 380) {
+                    gameState = 'TITLE';
+                    playSound('tap');
+                }
+                // Debug Log Copy
+                else if (vy > 570 && vy < 630 && vx > 100 && vx < 380) {
+                    copyDebugLogToClipboard();
+                    playSound('tap');
                 }
             } else if (gameState === 'GAMEOVER') {
                 if (vy > 500 && vy < 600 && vx > 100 && vx < 380) {
@@ -156,60 +228,69 @@
                     playSound('tap');
                 }
             } else if (gameState === 'PLAY') {
-                // カウンター上の客タップ判定（寿司提供）
+                // Pause button (Top-Right)
+                if (vx > 370 && vx < 460 && vy > 10 && vy < 55) {
+                    gameState = 'PAUSE';
+                    playSound('tap');
+                    return;
+                }
+
+                // Customer serve tap
                 for (let i = 0; i < customers.length; i++) {
                     const c = customers[i];
-                    if (vx > c.x - 50 && vx < c.x + 50 && vy > 80 && vy < 220) {
+                    if (vx > c.x - 60 && vx < c.x + 60 && vy > 80 && vy < 220) {
                         tryServe(i);
                         return;
                     }
                 }
 
-                // ゴミ箱（リセットボタン）右下
+                // Reset plate button
                 if (vx > 380 && vx < 460 && vy > 580 && vy < 650) {
                     resetPlate();
                     playSound('tap');
                     return;
                 }
 
-                // シャリボタン
-                if (vx > 40 && vx < 140 && vy > 720 && vy < 800) {
-                    stagedRice = true;
-                    playSound('tap');
-                }
-                // のりボタン
-                else if (vx > 150 && vx < 250 && vy > 720 && vy < 800) {
-                    stagedNori = true;
-                    playSound('tap');
-                }
-                // 包丁ボタン
-                else if (vx > 260 && vx < 360 && vy > 720 && vy < 800) {
-                    if (stagedTopping && !isCut) {
-                        isCut = true;
-                        playSound('tap');
-                    }
-                }
-                // わさびボタン
-                else if (vx > 370 && vx < 450 && vy > 720 && vy < 800) {
-                    if (stagedRice && !hasWasabi) {
-                        hasWasabi = true;
-                        playSound('tap');
-                    }
-                }
-
-                // ネタ選択パレット (y: 600 - 700)
+                // Topping Palette Selection (5 items correctly spaced: 10px margin, 80px width each)
+                // x-coords: 15, 105, 195, 285, 375
                 const keys = Object.keys(TOPPINGS);
-                const w = 80;
-                const gap = 10;
-                const startX = 20;
+                const itemWidth = 80;
+                const itemGap = 10;
+                const startX = 15;
                 keys.forEach((key, index) => {
-                    const nx = startX + index * (w + gap);
-                    if (vx > nx && vx < nx + w && vy > 600 && vy < 680) {
+                    const nx = startX + index * (itemWidth + itemGap);
+                    if (vx >= nx && vx <= nx + itemWidth && vy >= 600 && vy <= 680) {
                         stagedTopping = key;
                         isCut = false;
                         playSound('tap');
                     }
                 });
+
+                // Action Buttons (4 items correctly spaced: 20px margin, 95px width each)
+                // 1. Rice
+                if (vx >= 20 && vx <= 115 && vy >= 720 && vy <= 800) {
+                    stagedRice = true;
+                    playSound('tap');
+                }
+                // 2. Nori
+                else if (vx >= 130 && vx <= 225 && vy >= 720 && vy <= 800) {
+                    stagedNori = true;
+                    playSound('tap');
+                }
+                // 3. Knife
+                else if (vx >= 240 && vx <= 335 && vy >= 720 && vy <= 800) {
+                    if (stagedTopping && !isCut) {
+                        isCut = true;
+                        playSound('tap');
+                    }
+                }
+                // 4. Wasabi
+                else if (vx >= 350 && vx <= 445 && vy >= 720 && vy <= 800) {
+                    if (stagedRice && !hasWasabi) {
+                        hasWasabi = true;
+                        playSound('tap');
+                    }
+                }
             }
         }
 
@@ -221,8 +302,8 @@
         function startGame() {
             gameState = 'PLAY';
             score = 0;
+            servedCount = 0;
             customers = [];
-            spawnTimer = 0;
             gameTime = 0;
             resetPlate();
             spawnCustomer();
@@ -242,7 +323,6 @@
             const randomKey = keys[Math.floor(Math.random() * keys.length)];
             const topping = TOPPINGS[randomKey];
 
-            // EASYモードでは中央（X: 240）に1人だけ配置
             customers.push({
                 toppingKey: randomKey,
                 toppingName: topping.name,
@@ -270,15 +350,15 @@
 
             if (valid) {
                 score += customer.price;
+                servedCount++;
                 customers.splice(customerIndex, 1);
                 playSound('success');
                 resetPlate();
-                // EASYモードなので客が居なくなったら少し待ってから次の客を呼ぶ
                 setTimeout(() => {
                     if (gameState === 'PLAY' && customers.length === 0) {
                         spawnCustomer();
                     }
-                }, 500);
+                }, 400);
             } else {
                 playSound('error');
                 customer.patience -= 15;
@@ -286,13 +366,16 @@
         }
 
         function update(dt) {
+            if (toastTimer > 0) {
+                toastTimer -= dt;
+            }
+
             if (gameState !== 'PLAY') return;
 
             gameTime += dt;
 
-            // 客のイライラ減少（EASYモードでは少しゆっくり減るように調整）
             customers.forEach(c => {
-                c.patience -= dt * 2.2; 
+                c.patience -= dt * 2.2;
                 if (c.patience <= 0) {
                     gameState = 'GAMEOVER';
                     playSound('error');
@@ -310,20 +393,20 @@
                 ctx.fillStyle = '#f1c40f';
                 ctx.font = 'bold 44px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('寿司ブレイン', VIRTUAL_WIDTH / 2, 220);
+                ctx.fillText('寿司パニック', VIRTUAL_WIDTH / 2, 220);
 
                 ctx.fillStyle = '#fff';
                 ctx.font = '18px sans-serif';
                 ctx.fillText('難易度を選んでください', VIRTUAL_WIDTH / 2, 340);
 
-                // EASYモードボタン
+                // EASY Mode Button
                 ctx.fillStyle = '#27ae60';
                 ctx.fillRect(100, 420, 280, 80);
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 26px sans-serif';
                 ctx.fillText('EASY モード (客1人)', VIRTUAL_WIDTH / 2, 468);
 
-                // NORMALモードボタン（準備中）
+                // NORMAL Mode Button
                 ctx.fillStyle = '#555';
                 ctx.fillRect(100, 520, 280, 80);
                 ctx.fillStyle = '#aaa';
@@ -345,7 +428,6 @@
                 ctx.font = '24px sans-serif';
                 ctx.fillText(`売上総額: ￥${score}`, VIRTUAL_WIDTH / 2, 340);
 
-                // タイトルへ戻るボタン
                 ctx.fillStyle = '#2980b9';
                 ctx.fillRect(100, 500, 280, 80);
                 ctx.fillStyle = '#fff';
@@ -354,26 +436,34 @@
                 return;
             }
 
-            // --- プレイ画面描画 ---
+            // --- Gameplay Screen ---
+            // Counter Top Background
             ctx.fillStyle = '#34495e';
             ctx.fillRect(0, 0, VIRTUAL_WIDTH, 240);
             ctx.fillStyle = '#d35400';
             ctx.fillRect(0, 230, VIRTUAL_WIDTH, 20);
 
-            // スコア表示
+            // Score Display
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 24px sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillText(`売上: ￥${score}`, 20, 40);
+            ctx.fillText(`売上: ￥${score}`, 20, 42);
 
-            // 客の描画
+            // Pause Button
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fillRect(370, 10, 90, 45);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('⏸ ポーズ', 415, 38);
+
+            // Customer rendering
             customers.forEach((c) => {
                 ctx.fillStyle = '#ecf0f1';
                 ctx.beginPath();
                 ctx.arc(c.x, 140, 45, 0, Math.PI * 2);
                 ctx.fill();
 
-                // 怒りメーター背景
                 ctx.fillStyle = '#555';
                 ctx.fillRect(c.x - 50, 75, 100, 12);
                 
@@ -381,7 +471,6 @@
                 ctx.fillStyle = ratio > 0.4 ? '#2ecc71' : '#e74c3c';
                 ctx.fillRect(c.x - 50, 75, 100 * ratio, 12);
 
-                // 吹き出し（注文）
                 ctx.fillStyle = '#fff';
                 ctx.beginPath();
                 ctx.roundRect(c.x - 70, 15, 140, 50, 8);
@@ -396,7 +485,7 @@
                 ctx.fillText(orderText, c.x, 45);
             });
 
-            // 調理台エリア
+            // Kitchen Board Area
             ctx.fillStyle = '#bdc3c7';
             ctx.fillRect(20, 280, 440, 290);
             ctx.strokeStyle = '#7f8c8d';
@@ -420,7 +509,7 @@
             }
             ctx.fillText(`ネタ: ${toppingDisplay}`, 40, previewY);
 
-            // ゴミ箱ボタン
+            // Reset Button (Trash)
             ctx.fillStyle = '#c0392b';
             ctx.fillRect(380, 580, 80, 60);
             ctx.fillStyle = '#fff';
@@ -428,43 +517,104 @@
             ctx.textAlign = 'center';
             ctx.fillText('やり直し', 420, 615);
 
-            // --- 下部操作ボタン群 ---
+            // Topping Palette Buttons (5 items: Width 80, Gap 10, Start 15)
             const keys = Object.keys(TOPPINGS);
-            const w = 80;
-            const gap = 10;
-            const startX = 20;
+            const itemWidth = 80;
+            const itemGap = 10;
+            const startX = 15;
             keys.forEach((key, index) => {
-                const nx = startX + index * (w + gap);
+                const nx = startX + index * (itemWidth + itemGap);
                 const isSelected = stagedTopping === key;
                 ctx.fillStyle = isSelected ? '#2980b9' : '#7f8c8d';
-                ctx.fillRect(nx, 600, w, 80);
+                ctx.fillRect(nx, 600, itemWidth, 80);
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 14px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText(TOPPINGS[key].name, nx + w / 2, 645);
+                ctx.fillText(TOPPINGS[key].name, nx + itemWidth / 2, 645);
             });
 
-            // アクションボタン
+            // Action Buttons (4 items: Width 95, Gap 10, Start 20)
+            // 1. Rice
             ctx.fillStyle = stagedRice ? '#27ae60' : '#e67e22';
-            ctx.fillRect(40, 720, 100, 80);
+            ctx.fillRect(20, 720, 95, 80);
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 16px sans-serif';
-            ctx.fillText('シャリ', 90, 765);
+            ctx.fillText('シャリ', 67, 765);
 
+            // 2. Nori
             ctx.fillStyle = stagedNori ? '#27ae60' : '#e67e22';
-            ctx.fillRect(150, 720, 100, 80);
+            ctx.fillRect(130, 720, 95, 80);
             ctx.fillStyle = '#fff';
-            ctx.fillText('のり', 200, 765);
+            ctx.fillText('のり', 177, 765);
 
+            // 3. Knife
             ctx.fillStyle = isCut ? '#27ae60' : '#e67e22';
-            ctx.fillRect(260, 720, 100, 80);
+            ctx.fillRect(240, 720, 95, 80);
             ctx.fillStyle = '#fff';
-            ctx.fillText('包丁', 310, 765);
+            ctx.fillText('包丁', 287, 765);
 
+            // 4. Wasabi
             ctx.fillStyle = hasWasabi ? '#27ae60' : '#e67e22';
-            ctx.fillRect(370, 720, 80, 80);
+            ctx.fillRect(350, 720, 95, 80);
             ctx.fillStyle = '#fff';
-            ctx.fillText('わさび', 410, 765);
+            ctx.fillText('わさび', 397, 765);
+
+            // --- Pause Screen Overlay ---
+            if (gameState === 'PAUSE') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+                ctx.fillRect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+
+                ctx.fillStyle = '#f1c40f';
+                ctx.font = 'bold 36px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('PAUSE', VIRTUAL_WIDTH / 2, 180);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '22px sans-serif';
+                ctx.fillText(`現在の売上: ￥${score}`, VIRTUAL_WIDTH / 2, 250);
+
+                // Button 1: Resume
+                ctx.fillStyle = '#27ae60';
+                ctx.fillRect(100, 330, 280, 60);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillText('ゲームを再開', VIRTUAL_WIDTH / 2, 368);
+
+                // Button 2: Retry
+                ctx.fillStyle = '#e67e22';
+                ctx.fillRect(100, 410, 280, 60);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillText('やり直し (リトライ)', VIRTUAL_WIDTH / 2, 448);
+
+                // Button 3: Return to Title
+                ctx.fillStyle = '#2980b9';
+                ctx.fillRect(100, 490, 280, 60);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillText('タイトルにもどる', VIRTUAL_WIDTH / 2, 528);
+
+                // Button 4: Copy Debug Log
+                ctx.fillStyle = '#8e44ad';
+                ctx.fillRect(100, 570, 280, 60);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillText('📋 デバッグログコピー', VIRTUAL_WIDTH / 2, 608);
+            }
+
+            // Toast notification
+            if (toastTimer > 0) {
+                ctx.fillStyle = 'rgba(0,0,0,0.85)';
+                ctx.fillRect(80, 700, 320, 50);
+                ctx.strokeStyle = '#f1c40f';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(80, 700, 320, 50);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(toastMessage, VIRTUAL_WIDTH / 2, 730);
+            }
         }
 
         let lastTime = 0;
