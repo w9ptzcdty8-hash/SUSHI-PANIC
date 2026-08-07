@@ -449,17 +449,11 @@
             cCtx.strokeStyle = 'rgba(180,120,0,0.3)'; cCtx.lineWidth = 1.5;
             [30, 38, 46].forEach(y => { cCtx.beginPath(); cCtx.moveTo(16, y); cCtx.lineTo(w-16, y); cCtx.stroke(); });
 
-            cCtx.fillStyle = 'rgba(140,80,10,0.45)';
-            for (let i = 0; i < 6; i++) {
-                cCtx.beginPath();
-                cCtx.ellipse(20+Math.random()*(w-40), 26+Math.random()*30, 4+Math.random()*3, 2, Math.random()*Math.PI, 0, Math.PI*2);
-                cCtx.fill();
-            }
-            cCtx.fillStyle = 'rgba(255,255,255,0.55)'; cCtx.fillRect(18, 25, w-36, 4);
+            // 焼き色（キャラメリゼした端。暖色のみで海苔と紛らわしくならないように）
+            cCtx.fillStyle = 'rgba(196,122,20,0.4)';
+            cCtx.beginPath(); cCtx.roundRect(14, 50, w-28, 10, {bottomLeft:5, bottomRight:5}); cCtx.fill();
 
-            cCtx.fillStyle = '#171c15';
-            cCtx.beginPath(); cCtx.moveTo(14, 58); cCtx.lineTo(14, 75); cCtx.lineTo(w-14, 75); cCtx.lineTo(w-14, 58); cCtx.fill();
-            cCtx.fillStyle = 'rgba(255,255,255,0.08)'; cCtx.fillRect(14, 58, w-28, 3);
+            cCtx.fillStyle = 'rgba(255,255,255,0.55)'; cCtx.fillRect(18, 25, w-36, 4);
         }
 
         function renderIka(cCtx, w, h) {
@@ -541,48 +535,86 @@
             cCtx.stroke(path);
         }
 
+        // いくらの粒を隙間なく敷き詰める共通ロジック
+        function renderIkuraCluster(cCtx, cx, cy, rx, ry, spacing) {
+            const balls = [];
+            let row = 0;
+            for (let y = cy - ry; y <= cy + ry; y += spacing * 0.82, row++) {
+                const rowOffset = (row % 2 === 0) ? 0 : spacing / 2;
+                for (let x = cx - rx - spacing; x <= cx + rx + spacing; x += spacing) {
+                    const xx = x + rowOffset;
+                    const dx = (xx - cx) / rx, dy = (y - cy) / ry;
+                    if (dx*dx + dy*dy <= 1.08) {
+                        balls.push({
+                            x: xx + (Math.random()-0.5)*spacing*0.32,
+                            y: y + (Math.random()-0.5)*spacing*0.32,
+                            r: spacing*0.52*(0.85+Math.random()*0.28)
+                        });
+                    }
+                }
+            }
+            balls.sort((a, b) => a.y - b.y);
+            const palettes = [
+                ['#ffe9bc', '#ff9a3d', '#f24d12', '#8f1503'],
+                ['#ffd79a', '#ff7e2b', '#e2400d', '#7c1002'],
+                ['#fff0c8', '#ffab55', '#f65e1c', '#9c1e05']
+            ];
+            balls.forEach(b => {
+                const pal = palettes[Math.floor(Math.random()*palettes.length)];
+                const grad = cCtx.createRadialGradient(b.x-b.r*0.35, b.y-b.r*0.4, b.r*0.15, b.x, b.y, b.r);
+                grad.addColorStop(0, pal[0]); grad.addColorStop(0.35, pal[1]);
+                grad.addColorStop(0.7, pal[2]); grad.addColorStop(1, pal[3]);
+                cCtx.fillStyle = grad;
+                cCtx.beginPath(); cCtx.arc(b.x, b.y, b.r, 0, Math.PI*2); cCtx.fill();
+                cCtx.strokeStyle = 'rgba(90,8,4,0.35)'; cCtx.lineWidth = 0.6; cCtx.stroke();
+                // 黄身の芯
+                cCtx.fillStyle = 'rgba(255,255,255,0.5)';
+                cCtx.beginPath(); cCtx.arc(b.x+b.r*0.12, b.y+b.r*0.2, b.r*0.22, 0, Math.PI*2); cCtx.fill();
+                // 照りのハイライト
+                cCtx.fillStyle = 'rgba(255,255,255,0.9)';
+                cCtx.beginPath(); cCtx.arc(b.x-b.r*0.38, b.y-b.r*0.42, b.r*0.24, 0, Math.PI*2); cCtx.fill();
+                // 粒の丸みを見せる縁の弧
+                cCtx.strokeStyle = 'rgba(255,255,255,0.3)'; cCtx.lineWidth = b.r*0.16;
+                cCtx.beginPath(); cCtx.arc(b.x, b.y, b.r*0.86, Math.PI*1.1, Math.PI*1.7); cCtx.stroke();
+            });
+        }
+
         function renderIkura(cCtx, w, h) {
             cCtx.fillStyle = '#12140f';
             cCtx.beginPath(); cCtx.roundRect(14, 32, w-28, 42, 3); cCtx.fill();
             cCtx.fillStyle = 'rgba(255,255,255,0.05)'; cCtx.fillRect(16, 34, w-32, 3);
-
-            const balls = [];
-            for (let i = 0; i < 32; i++) {
-                balls.push({ x: 19 + Math.random()*(w-38), y: 18 + Math.random()*36, r: 5 + Math.random()*3.4 });
-            }
-            balls.sort((a, b) => a.y - b.y);
-            balls.forEach(b => {
-                const grad = cCtx.createRadialGradient(b.x-b.r*0.35, b.y-b.r*0.4, b.r*0.15, b.x, b.y, b.r);
-                grad.addColorStop(0, '#ffe3b0'); grad.addColorStop(0.35, '#ff9a3d');
-                grad.addColorStop(0.7, '#f24d12'); grad.addColorStop(1, '#8f1503');
-                cCtx.fillStyle = grad;
-                cCtx.beginPath(); cCtx.arc(b.x, b.y, b.r, 0, Math.PI*2); cCtx.fill();
-                cCtx.strokeStyle = 'rgba(110,10,5,0.3)'; cCtx.lineWidth = 0.6; cCtx.stroke();
-                // 黄身の芯（本物のいくらの中心に見える点）
-                cCtx.fillStyle = 'rgba(255,255,255,0.5)';
-                cCtx.beginPath(); cCtx.arc(b.x+b.r*0.12, b.y+b.r*0.18, b.r*0.22, 0, Math.PI*2); cCtx.fill();
-                // 照りのハイライト
-                cCtx.fillStyle = 'rgba(255,255,255,0.85)';
-                cCtx.beginPath(); cCtx.arc(b.x-b.r*0.35, b.y-b.r*0.42, b.r*0.26, 0, Math.PI*2); cCtx.fill();
-            });
+            cCtx.save();
+            cCtx.beginPath(); cCtx.ellipse(w/2, 36, w/2-15, 21, 0, 0, Math.PI*2); cCtx.clip();
+            renderIkuraCluster(cCtx, w/2, 36, w/2-15, 21, 11);
+            cCtx.restore();
         }
 
-        // ウニ（ひだのある舌状の一片を重ねて盛りつけ感を出す）
-        function renderUni(cCtx, w, h) {
-            cCtx.fillStyle = '#12140f';
-            cCtx.beginPath(); cCtx.roundRect(14, 32, w-28, 42, 3); cCtx.fill();
-            cCtx.fillStyle = 'rgba(255,255,255,0.05)'; cCtx.fillRect(16, 34, w-32, 3);
-
-            const tongues = [
-                {x: 32, y: 30, rot: -0.25, s: 1.15},
-                {x: 52, y: 21, rot: 0.05, s: 1.3},
-                {x: 74, y: 25, rot: 0.3, s: 1.15},
-                {x: 92, y: 33, rot: 0.15, s: 1.05},
-                {x: 40, y: 44, rot: -0.15, s: 1.15},
-                {x: 64, y: 41, rot: 0.1, s: 1.25},
-                {x: 84, y: 46, rot: -0.1, s: 1.05}
+        // ウニのひだを隙間なく敷き詰める共通ロジック
+        function renderUniCluster(cCtx, cx, cy, rx, ry, spacing) {
+            const pieces = [];
+            let row = 0;
+            for (let y = cy - ry; y <= cy + ry; y += spacing * 0.7, row++) {
+                const rowOffset = (row % 2 === 0) ? 0 : spacing / 2;
+                for (let x = cx - rx - spacing; x <= cx + rx + spacing; x += spacing) {
+                    const xx = x + rowOffset;
+                    const dx = (xx - cx) / rx, dy = (y - cy) / ry;
+                    if (dx*dx + dy*dy <= 1.12) {
+                        pieces.push({
+                            x: xx + (Math.random()-0.5)*spacing*0.3,
+                            y: y + (Math.random()-0.5)*spacing*0.3,
+                            rot: (Math.random()-0.5)*1.3,
+                            s: (spacing/15)*(0.95+Math.random()*0.35)
+                        });
+                    }
+                }
+            }
+            pieces.sort((a, b) => a.y - b.y);
+            const palettes = [
+                ['#ffe98a', '#f7b93a', '#e8891a', '#a85305'],
+                ['#fff0a8', '#f9c34e', '#ec9420', '#b05f08'],
+                ['#ffdf72', '#f2a82c', '#dd7c12', '#9c4a02']
             ];
-            tongues.forEach(t => {
+            pieces.forEach(t => {
                 cCtx.save();
                 cCtx.translate(t.x, t.y);
                 cCtx.rotate(t.rot);
@@ -595,35 +627,27 @@
                 path.quadraticCurveTo(2, 9, -4, 6);
                 path.quadraticCurveTo(-10, 7, -14, 0);
                 path.closePath();
-
+                const pal = palettes[Math.floor(Math.random()*palettes.length)];
                 const grad = cCtx.createLinearGradient(-14, -8, 10, 8);
-                grad.addColorStop(0, '#ffe98a'); grad.addColorStop(0.4, '#f7b93a');
-                grad.addColorStop(0.75, '#e8891a'); grad.addColorStop(1, '#a85305');
+                grad.addColorStop(0, pal[0]); grad.addColorStop(0.4, pal[1]);
+                grad.addColorStop(0.75, pal[2]); grad.addColorStop(1, pal[3]);
                 cCtx.fillStyle = grad; cCtx.fill(path);
-                cCtx.strokeStyle = 'rgba(120,60,0,0.4)'; cCtx.lineWidth = 0.7; cCtx.stroke(path);
-
-                cCtx.strokeStyle = 'rgba(255,250,210,0.55)'; cCtx.lineWidth = 0.8;
+                cCtx.strokeStyle = 'rgba(110,55,0,0.45)'; cCtx.lineWidth = 0.7; cCtx.stroke(path);
+                cCtx.strokeStyle = 'rgba(255,250,210,0.6)'; cCtx.lineWidth = 0.8;
                 cCtx.beginPath(); cCtx.moveTo(-9, -2); cCtx.quadraticCurveTo(-2, -6, 6, -1); cCtx.stroke();
+                cCtx.strokeStyle = 'rgba(255,250,210,0.35)'; cCtx.lineWidth = 0.6;
+                cCtx.beginPath(); cCtx.moveTo(-6, 3); cCtx.quadraticCurveTo(0, 6, 6, 3); cCtx.stroke();
                 cCtx.restore();
             });
         }
 
-        // 小鉢のベース（藍色の点線模様の陶器・寿司になる前の盛り付け用）
-        function renderLeafAccent(cCtx, x, y, scale, rot) {
+        function renderUni(cCtx, w, h) {
+            cCtx.fillStyle = '#12140f';
+            cCtx.beginPath(); cCtx.roundRect(14, 32, w-28, 42, 3); cCtx.fill();
+            cCtx.fillStyle = 'rgba(255,255,255,0.05)'; cCtx.fillRect(16, 34, w-32, 3);
             cCtx.save();
-            cCtx.translate(x, y); cCtx.rotate(rot); cCtx.scale(scale, scale);
-            cCtx.fillStyle = '#4f9c42';
-            const p = new Path2D();
-            p.moveTo(0, -16);
-            p.bezierCurveTo(12, -14, 16, -2, 0, 16);
-            p.bezierCurveTo(-16, -2, -12, -14, 0, -16);
-            cCtx.fill(p);
-            cCtx.strokeStyle = 'rgba(255,255,255,0.35)'; cCtx.lineWidth = 1;
-            cCtx.beginPath(); cCtx.moveTo(0, -14); cCtx.lineTo(0, 14); cCtx.stroke();
-            for (let yy = -10; yy <= 10; yy += 6) {
-                cCtx.beginPath(); cCtx.moveTo(0, yy); cCtx.lineTo(6, yy+4); cCtx.stroke();
-                cCtx.beginPath(); cCtx.moveTo(0, yy); cCtx.lineTo(-6, yy+4); cCtx.stroke();
-            }
+            cCtx.beginPath(); cCtx.ellipse(w/2, 34, w/2-13, 20, 0, 0, Math.PI*2); cCtx.clip();
+            renderUniCluster(cCtx, w/2, 34, w/2-13, 20, 15);
             cCtx.restore();
         }
 
@@ -661,27 +685,14 @@
         }
 
         // いくら小鉢（寿司にする前のパレット表示用）
+        // いくら小鉢（寿司にする前のパレット表示用）
         function renderIkuraBowl(cCtx, w, h) {
             renderServingBowlBase(cCtx, w, h);
             const cx = w/2, rimY = h*0.46, rimRX = w*0.4;
             cCtx.save();
-            cCtx.beginPath(); cCtx.ellipse(cx, rimY-10, rimRX-6, 22, 0, 0, Math.PI*2); cCtx.clip();
-            const balls = [];
-            for (let i = 0; i < 26; i++) {
-                balls.push({ x: cx + (Math.random()-0.5)*(rimRX-6)*1.8, y: rimY-10+(Math.random()-0.5)*30, r: 4+Math.random()*2.6 });
-            }
-            balls.sort((a, b) => a.y - b.y);
-            balls.forEach(b => {
-                const grad = cCtx.createRadialGradient(b.x-b.r*0.35, b.y-b.r*0.4, b.r*0.15, b.x, b.y, b.r);
-                grad.addColorStop(0, '#ffe3b0'); grad.addColorStop(0.35, '#ff9a3d');
-                grad.addColorStop(0.7, '#f24d12'); grad.addColorStop(1, '#8f1503');
-                cCtx.fillStyle = grad;
-                cCtx.beginPath(); cCtx.arc(b.x, b.y, b.r, 0, Math.PI*2); cCtx.fill();
-                cCtx.fillStyle = 'rgba(255,255,255,0.8)';
-                cCtx.beginPath(); cCtx.arc(b.x-b.r*0.35, b.y-b.r*0.4, b.r*0.25, 0, Math.PI*2); cCtx.fill();
-            });
+            cCtx.beginPath(); cCtx.ellipse(cx, rimY-10, rimRX-4, 24, 0, 0, Math.PI*2); cCtx.clip();
+            renderIkuraCluster(cCtx, cx, rimY-10, rimRX-4, 24, 10.5);
             cCtx.restore();
-            renderLeafAccent(cCtx, w*0.82, h*0.16, 0.55, 0.5);
         }
 
         // ウニ小鉢（寿司にする前のパレット表示用）
@@ -689,25 +700,9 @@
             renderServingBowlBase(cCtx, w, h);
             const cx = w/2, rimY = h*0.46, rimRX = w*0.4;
             cCtx.save();
-            cCtx.beginPath(); cCtx.ellipse(cx, rimY-10, rimRX-6, 20, 0, 0, Math.PI*2); cCtx.clip();
-            const spots = [
-                {x: cx-24, y: rimY-16, rot: -0.2}, {x: cx-6, y: rimY-22, rot: 0.1}, {x: cx+14, y: rimY-18, rot: 0.3},
-                {x: cx+28, y: rimY-8, rot: 0.15}, {x: cx-16, y: rimY-4, rot: -0.15}, {x: cx+4, y: rimY-6, rot: 0.05}, {x: cx+22, y: rimY-2, rot: -0.1}
-            ];
-            spots.forEach(t => {
-                cCtx.save(); cCtx.translate(t.x, t.y); cCtx.rotate(t.rot);
-                const path = new Path2D();
-                path.moveTo(-11, 0); path.quadraticCurveTo(-8, -6, -1, -5); path.quadraticCurveTo(4, -7, 7, -2);
-                path.quadraticCurveTo(10, 2, 6, 5); path.quadraticCurveTo(1, 7, -3, 5); path.quadraticCurveTo(-8, 6, -11, 0); path.closePath();
-                const grad = cCtx.createLinearGradient(-11, -6, 8, 6);
-                grad.addColorStop(0, '#ffe98a'); grad.addColorStop(0.4, '#f7b93a');
-                grad.addColorStop(0.75, '#e8891a'); grad.addColorStop(1, '#a85305');
-                cCtx.fillStyle = grad; cCtx.fill(path);
-                cCtx.strokeStyle = 'rgba(120,60,0,0.35)'; cCtx.lineWidth = 0.6; cCtx.stroke(path);
-                cCtx.restore();
-            });
+            cCtx.beginPath(); cCtx.ellipse(cx, rimY-10, rimRX-4, 22, 0, 0, Math.PI*2); cCtx.clip();
+            renderUniCluster(cCtx, cx, rimY-10, rimRX-4, 22, 14.5);
             cCtx.restore();
-            renderLeafAccent(cCtx, w*0.82, h*0.16, 0.5, 0.4);
         }
 
         function renderShari(cCtx, w, h) {
@@ -767,6 +762,7 @@
         let rating = 3.0;
         const MAX_RATING = 5.0;
         let servedCount = 0;
+        const CUSTOMER_SLOTS = 5;
         let customers = [];
         let cuttingBoard = [];
         let elapsedTime = 0;
@@ -803,6 +799,8 @@
         }
 
         // --- 入力処理 ---
+        const customerSlotX = (i) => 10 + i * 92 + 46;
+
         function handleTouch(x, y) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = VIRTUAL_WIDTH / rect.width;
@@ -820,12 +818,25 @@
                 if (vy > 550 && vy < 630 && vx > 100 && vx < 380) { gameState = 'TITLE'; playSound('tap'); }
             } else if (gameState === 'PLAY') {
                 // Pause
-                if (vx > 400 && vx < 460 && vy > 100 && vy < 150) { gameState = 'PAUSE'; playSound('tap'); return; }
+                if (vx > 410 && vx < 468 && vy > 10 && vy < 55) { gameState = 'PAUSE'; playSound('tap'); return; }
+
+                // カウンターの客（タップしたお客さんに提供・判定）
+                if (vy >= 95 && vy <= 255) {
+                    for (let i = 0; i < CUSTOMER_SLOTS; i++) {
+                        const cx = customerSlotX(i);
+                        if (vx >= cx - 46 && vx <= cx + 46) {
+                            const idx = customers.findIndex(c => c.slot === i);
+                            if (idx !== -1) serveCustomer(idx);
+                            return;
+                        }
+                    }
+                }
+
                 // ゴミ箱（まな板クリア）
-                if (vx > 405 && vx < 465 && vy > 760 && vy < 820) { if (cuttingBoard.length > 0) { cuttingBoard = []; playSound('trash'); } return; }
+                if (vx > 405 && vx < 465 && vy > 765 && vy < 825) { if (cuttingBoard.length > 0) { cuttingBoard = []; playSound('trash'); } return; }
 
                 // ネタパレット (3列x3行)
-                const gridX = [20, 170, 320]; const gridY = [205, 290, 375];
+                const gridX = [20, 170, 320]; const gridY = [265, 350, 435];
                 const keys = ['maguro', 'salmon', 'ikura', 'tamago', 'ebi', 'buri', 'uni', 'anago', 'ika'];
                 for (let i = 0; i < 9; i++) {
                     const row = Math.floor(i/3); const col = i%3;
@@ -844,77 +855,119 @@
 
         function addIngredient(item) {
             if (item === 'rice' && cuttingBoard.length > 0) cuttingBoard = [];
-            if (cuttingBoard.length < 4) { cuttingBoard.push(item); playSound('tap'); checkRecipe(); }
+            if (cuttingBoard.length < 4) { cuttingBoard.push(item); playSound('tap'); }
         }
 
         window.addEventListener('pointerdown', (e) => { handleTouch(e.clientX, e.clientY); e.preventDefault(); }, { passive: false });
 
-        function startGame() {
-            gameState = 'PLAY'; score = 0; rating = 3.0; servedCount = 0; customers = []; cuttingBoard = []; spawnCustomer();
+        // --- 難易度（スコアに応じてお客さんの人数・スピードが上がる） ---
+        const SCORE_THRESHOLDS = [0, 900, 2200, 4200, 6800];
+        let unlockedSlots = 1;
+
+        function getDifficultyLevel() {
+            let lvl = 0;
+            for (let i = 1; i < SCORE_THRESHOLDS.length; i++) { if (score >= SCORE_THRESHOLDS[i]) lvl = i; }
+            return lvl;
+        }
+        function getActiveSlotCount() { return Math.min(CUSTOMER_SLOTS, getDifficultyLevel() + 1); }
+        function getPatienceRate() { return 2.8 * (1 + getDifficultyLevel() * 0.16); }
+        function getRevealDuration() { return Math.max(1.6, 3.2 - getDifficultyLevel() * 0.3); }
+        function getRespawnDelay(base) { return Math.max(base * 0.4, base - getDifficultyLevel() * 60); }
+
+        function unlockNewSeatsIfNeeded() {
+            const target = getActiveSlotCount();
+            while (unlockedSlots < target) {
+                spawnCustomer(unlockedSlots);
+                unlockedSlots++;
+            }
         }
 
-        function spawnCustomer() {
-            if (customers.length >= 1) return;
+        function startGame() {
+            gameState = 'PLAY'; score = 0; rating = 3.0; servedCount = 0; customers = []; cuttingBoard = [];
+            unlockedSlots = 1;
+            spawnCustomer(0);
+        }
+
+        function spawnCustomer(slot) {
+            if (customers.some(c => c.slot === slot)) return;
             const keys = Object.keys(TOPPINGS);
             const rKey = keys[Math.floor(Math.random() * keys.length)];
             const isSabiNuki = (TOPPINGS[rKey].category === 'nigiri') ? (Math.random() < 0.3) : false;
-            customers.push({ key: rKey, category: TOPPINGS[rKey].category, price: TOPPINGS[rKey].price, name: TOPPINGS[rKey].name, isSabiNuki: isSabiNuki, patience: 100, maxPatience: 100 });
+            customers.push({
+                slot, key: rKey, category: TOPPINGS[rKey].category, price: TOPPINGS[rKey].price, name: TOPPINGS[rKey].name,
+                isSabiNuki: isSabiNuki, patience: 100, maxPatience: 100,
+                revealTimer: getRevealDuration(), revealDuration: getRevealDuration()
+            });
         }
 
-        // レシピ自動判定
-        function checkRecipe() {
-            if (customers.length === 0 || cuttingBoard.length < 2) return;
-            const c = customers[0]; const cb = cuttingBoard;
-            let isComplete = false; let isMatch = false;
-
+        // まな板の中身が完成した寿司になっているか判定（客とは照合しない）
+        function getPreparedSushi() {
+            const cb = cuttingBoard;
+            if (cb.length < 2) return null;
             const toppingItem = cb.find(item => TOPPINGS[item]);
-            if (!toppingItem) return;
+            if (!toppingItem) return null;
             const cat = TOPPINGS[toppingItem].category;
+            let complete = false;
 
             if (cat === 'nigiri') {
                 if (cb[0] === 'rice' && cb[cb.length - 1] === toppingItem) {
-                    if (cb.length === 2 && !cb.includes('wasabi')) isComplete = true;
-                    if (cb.length === 3 && cb[1] === 'wasabi') isComplete = true;
+                    if (cb.length === 2 && !cb.includes('wasabi')) complete = true;
+                    if (cb.length === 3 && cb[1] === 'wasabi') complete = true;
                 }
             } else if (cat === 'gunkan') {
-                if (cb.length === 3 && cb[0] === 'rice' && cb[1] === 'nori' && cb[2] === toppingItem) {
-                    isComplete = true;
-                }
+                if (cb.length === 3 && cb[0] === 'rice' && cb[1] === 'nori' && cb[2] === toppingItem) complete = true;
             } else if (cat === 'tamago') {
-                if (cb.length === 3 && cb[0] === 'rice' && cb[1] === toppingItem && cb[2] === 'nori') {
-                    isComplete = true;
-                }
+                if (cb.length === 3 && cb[0] === 'rice' && cb[1] === toppingItem && cb[2] === 'nori') complete = true;
             }
+            if (!complete) return null;
+            return { key: toppingItem, category: cat, hasWasabi: cb.includes('wasabi') };
+        }
 
-            if (!isComplete) return;
+        // タップされた客に、まな板の寿司を提供して判定
+        function serveCustomer(idx) {
+            const c = customers[idx];
+            if (!c) return;
+            const sushi = getPreparedSushi();
+            if (!sushi) { playSound('tap'); return; }
 
-            if (toppingItem === c.key) {
+            let isMatch = false;
+            if (sushi.key === c.key) {
                 if (c.category === 'nigiri') {
-                    const hasWasabi = cb.includes('wasabi');
-                    if ((c.isSabiNuki && !hasWasabi) || (!c.isSabiNuki && hasWasabi)) isMatch = true;
+                    if ((c.isSabiNuki && !sushi.hasWasabi) || (!c.isSabiNuki && sushi.hasWasabi)) isMatch = true;
                 } else isMatch = true;
             }
 
             if (isMatch) {
                 score += c.price; servedCount++; rating = Math.min(MAX_RATING, rating + 0.35);
-                customers.pop(); cuttingBoard = []; playSound('success');
-                setTimeout(spawnCustomer, 350);
+                const slot = c.slot;
+                customers.splice(idx, 1);
+                cuttingBoard = [];
+                playSound('success');
+                unlockNewSeatsIfNeeded();
+                setTimeout(() => spawnCustomer(slot), getRespawnDelay(350));
             } else {
-                rating = Math.max(0, rating - 0.5); cuttingBoard = []; playSound('error');
+                rating = Math.max(0, rating - 0.5);
+                cuttingBoard = [];
+                playSound('error');
                 if (rating <= 0) gameState = 'GAMEOVER';
             }
         }
 
         function update(dt) {
             if (gameState !== 'PLAY') return;
-            customers.forEach(c => {
-                c.patience -= dt * 2.8;
+            const patienceRate = getPatienceRate();
+            for (let i = customers.length - 1; i >= 0; i--) {
+                const c = customers[i];
+                if (c.revealTimer > 0) c.revealTimer = Math.max(0, c.revealTimer - dt);
+                c.patience -= dt * patienceRate;
                 if (c.patience <= 0) {
-                    rating -= 0.8; customers.pop(); playSound('error'); cuttingBoard = [];
-                    if (rating <= 0) gameState = 'GAMEOVER'; else setTimeout(spawnCustomer, 500);
+                    const slot = c.slot;
+                    rating -= 0.8; customers.splice(i, 1); playSound('error');
+                    if (rating <= 0) { gameState = 'GAMEOVER'; } else { setTimeout(() => spawnCustomer(slot), getRespawnDelay(600)); }
                 }
-            });
+            }
         }
+
 
         // --- 描画関数 ---
         // 漆器ボタン風カード（操作ボタン用）
@@ -959,6 +1012,32 @@
                 ctx.fillStyle = '#171c15'; ctx.fillRect(-10, -30, 20, 55);
             }
             ctx.restore();
+        }
+
+        // カウンターのお客さん（簡易な胸像イラスト）
+        const CUSTOMER_STYLES = [
+            { hair: '#3a2a1a', shirt: '#d9381e' },
+            { hair: '#5a3820', shirt: '#1c3d5f' },
+            { hair: '#1a1a1a', shirt: '#3a7d44' },
+            { hair: '#7a4a25', shirt: '#c9973a' },
+            { hair: '#2a2a2a', shirt: '#8a4fae' }
+        ];
+        function drawCustomerBust(ctx, cx, cy, styleIdx) {
+            const st = CUSTOMER_STYLES[styleIdx % CUSTOMER_STYLES.length];
+            ctx.fillStyle = st.shirt;
+            ctx.beginPath(); ctx.roundRect(cx-30, cy+8, 60, 42, {topLeft:18, topRight:18, bottomLeft:0, bottomRight:0}); ctx.fill();
+            ctx.fillStyle = '#f0c49a';
+            ctx.fillRect(cx-8, cy+2, 16, 14);
+            ctx.fillStyle = '#f7d3ab';
+            ctx.beginPath(); ctx.arc(cx, cy-8, 20, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = st.hair;
+            ctx.beginPath(); ctx.arc(cx, cy-14, 21, Math.PI, 0); ctx.fill();
+            ctx.fillRect(cx-21, cy-14, 6, 16);
+            ctx.fillRect(cx+15, cy-14, 6, 16);
+            ctx.fillStyle = '#2c2c2c';
+            ctx.beginPath(); ctx.arc(cx-7, cy-8, 2, 0, Math.PI*2); ctx.arc(cx+7, cy-8, 2, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#a35c3c'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(cx, cy-2, 5, 0.1*Math.PI, 0.9*Math.PI); ctx.stroke();
         }
 
         function draw() {
@@ -1021,38 +1100,57 @@
             ctx.drawImage(assets['noren'], 0, 0);
 
             // ヘッダーUI（和紙の勘定札）
-            drawWashiCard(ctx, 10, 100, 150, 50);
+            drawWashiCard(ctx, 10, 10, 150, 50);
             ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign='left';
-            ctx.fillText(`💰￥${score}`, 20, 120); ctx.fillText(`⭐${rating.toFixed(1)}`, 20, 140);
+            ctx.fillText(`💰￥${score}`, 20, 30); ctx.fillText(`⭐${rating.toFixed(1)}`, 20, 50);
 
-            drawWashiCard(ctx, 400, 100, 60, 45);
-            ctx.fillStyle = '#1c3d5f'; ctx.fillRect(420, 110, 6, 25); ctx.fillRect(432, 110, 6, 25);
+            drawWashiCard(ctx, 410, 10, 58, 45);
+            ctx.fillStyle = '#1c3d5f'; ctx.fillRect(430, 20, 6, 25); ctx.fillRect(442, 20, 6, 25);
 
-            // 注文の伝票（オーダーチケット）
-            if (customers.length > 0) {
-                const c = customers[0]; const cx = 230; const cy = 100;
-                drawWashiCard(ctx, cx, cy, 160, 85);
-                ctx.fillStyle = '#c9973a';
-                ctx.beginPath(); ctx.arc(cx+150, cy+12, 9, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign='center';
-                ctx.fillText('注', cx+150, cy+16);
+            // カウンター越しに並ぶお客さん（吹き出しは出た直後だけ・あとは記憶勝負）
+            for (let i = 0; i < CUSTOMER_SLOTS; i++) {
+                const slotCx = customerSlotX(i);
+                const c = customers.find(cc => cc.slot === i);
+                if (!c) continue;
 
-                ctx.fillStyle = '#d9381e';
-                ctx.font = 'bold 19px serif';
-                ctx.textAlign = 'center';
-                let orderText = c.name;
-                if (c.isSabiNuki) orderText += ' サビ抜き';
-                ctx.fillText(`${orderText}！`, cx + 76, cy + 32);
+                // 注文の吹き出し（出現直後だけ表示し、フェードして消える）
+                if (c.revealTimer > 0) {
+                    const bw = 82, bh = 58, by = 95;
+                    const bx = slotCx - bw/2;
+                    const alpha = c.revealTimer < 0.4 ? c.revealTimer/0.4 : 1;
+                    ctx.globalAlpha = alpha;
+                    drawWashiCard(ctx, bx, by, bw, bh, 12);
+                    ctx.fillStyle = '#f6ecd9';
+                    ctx.beginPath();
+                    ctx.moveTo(slotCx-8, by+bh-2); ctx.lineTo(slotCx+8, by+bh-2); ctx.lineTo(slotCx, by+bh+9);
+                    ctx.closePath(); ctx.fill();
 
-                drawCompleteSushi(ctx, cx + 80, cy + 55, c.key, c.isSabiNuki, 0.5);
+                    drawCompleteSushi(ctx, slotCx, by+30, c.key, c.isSabiNuki, 0.36);
 
+                    if (c.isSabiNuki) {
+                        ctx.fillStyle = '#d9381e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+                        ctx.fillText('サビ抜き', slotCx, by+bh-6);
+                    }
+                    ctx.globalAlpha = 1;
+                }
+
+                drawCustomerBust(ctx, slotCx, 205, i);
+
+                // 我慢メーター（吹き出しが消えた後も常に表示）
                 const tRatio = Math.max(0, c.patience / c.maxPatience);
-                ctx.fillStyle = 'rgba(28,61,95,0.15)'; ctx.fillRect(cx+10, cy+98, 140, 6);
-                ctx.fillStyle = tRatio>0.3?'#3a7d44':'#d9381e'; ctx.fillRect(cx+10, cy+98, 140*tRatio, 6);
+                const barW = 56;
+                drawWashiCard(ctx, slotCx-barW/2-4, 165, barW+8, 13, 6);
+                ctx.fillStyle = 'rgba(28,61,95,0.2)'; ctx.fillRect(slotCx-barW/2, 169, barW, 4);
+                ctx.fillStyle = tRatio > 0.3 ? '#3a7d44' : '#d9381e';
+                ctx.fillRect(slotCx-barW/2, 169, barW*tRatio, 4);
             }
 
+            // カウンターの縁
+            ctx.strokeStyle = 'rgba(60,38,18,0.5)'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(8, 250); ctx.lineTo(472, 250); ctx.stroke();
+
             // パレット (3x3)
-            const gridX = [20, 170, 320]; const gridY = [205, 290, 375];
+            const gridX = [20, 170, 320]; const gridY = [265, 350, 435];
             const keys = ['maguro', 'salmon', 'ikura', 'tamago', 'ebi', 'buri', 'uni', 'anago', 'ika'];
             keys.forEach((k, i) => {
                 const r = Math.floor(i/3); const c = i%3;
@@ -1062,19 +1160,19 @@
             });
 
             // 下部調理場
-            ctx.drawImage(assets['wasabi_plate'], 15, 515);
-            ctx.drawImage(assets['nori_plate'], 95, 515);
-            ctx.drawImage(assets['hangiri'], 5, 600);
-            ctx.drawImage(assets['manaita'], 180, 530);
-            ctx.drawImage(assets['knife'], 180, 765);
+            ctx.drawImage(assets['wasabi_plate'], 15, 520);
+            ctx.drawImage(assets['nori_plate'], 95, 520);
+            ctx.drawImage(assets['hangiri'], 5, 605);
+            ctx.drawImage(assets['manaita'], 180, 535);
+            ctx.drawImage(assets['knife'], 180, 770);
 
             // クリアボタン（木桶風）
-            drawWashiCard(ctx, 405, 760, 60, 60);
-            ctx.fillStyle = '#8a5a2c'; ctx.font = '26px sans-serif'; ctx.textAlign='center'; ctx.fillText('🗑', 435, 800);
+            drawWashiCard(ctx, 405, 765, 60, 60);
+            ctx.fillStyle = '#8a5a2c'; ctx.font = '26px sans-serif'; ctx.textAlign='center'; ctx.fillText('🗑', 435, 805);
 
             // まな板上の寿司
             if (cuttingBoard.length > 0) {
-                const bx = 320, by = 620;
+                const bx = 320, by = 625;
                 if (cuttingBoard.includes('rice')) ctx.drawImage(assets['shari'], bx-60, by-40);
                 if (cuttingBoard[0]==='rice' && cuttingBoard[1]==='nori') { ctx.fillStyle='#171c15'; ctx.beginPath(); ctx.roundRect(bx-45, by-45, 90, 50, 5); ctx.fill(); }
                 if (cuttingBoard.includes('wasabi') && !cuttingBoard.includes('nori')) { ctx.fillStyle='#8cc63f'; ctx.beginPath(); ctx.arc(bx, by-10, 10, 0, Math.PI*2); ctx.fill(); }
