@@ -55,6 +55,7 @@ html, body {
     justify-content: center;
 
     background: var(--color-bg);
+    width: 100%;
 }
 
 /* ========================================
@@ -64,10 +65,10 @@ html, body {
 
 #game-stage {
     position: relative;
-    width: 480px;
-    height: 854px;
-    max-width: 100%;
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    max-width: 480px;
+    max-height: 854px;
     background: #f4eee6;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
     overflow: hidden;
