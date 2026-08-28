@@ -717,10 +717,6 @@ let customers = [];
 let cuttingBoard = [];
 let elapsedTime = 0;
 
-// 【新機能】連続見逃しカウント＆エフェクト用変数
-let consecutiveMisses = 0;
-let warningMessageTimer = 0;
-
 // ========================================
 // SoundFX
 // ========================================
@@ -809,7 +805,6 @@ function startGame() {
     sfx.unlock();
     state = STATE.PLAYING;
     score = 0; rating = 3.0; servedCount = 0; customers = []; cuttingBoard = [];
-    consecutiveMisses = 0; warningMessageTimer = 0;
     unlockedSlots = 1;
     spawnCustomer(0);
 }
@@ -862,7 +857,6 @@ function handleTouch(x, y) {
     if (state === STATE.TITLE) {
         if (vx >= 90 && vx <= 390 && vy >= 670 && vy <= 742) { startGame(); sfx.playTap(); }
         else if (vx >= 140 && vx <= 340 && vy >= 752 && vy <= 802) { goToHowto(); sfx.playTap(); }
-        // 【URL更新】https://mrs-games.pages.dev
         else if (vx >= 140 && vx <= 340 && vy >= 810 && vy <= 845) { window.open('https://mrs-games.pages.dev', '_blank'); sfx.playTap(); }
     } else if (state === STATE.HOWTO) {
         goToTitle(); sfx.playTap();
@@ -928,8 +922,6 @@ function getDifficultyLevel() {
 }
 function getActiveSlotCount() { return Math.min(CUSTOMER_SLOTS, getDifficultyLevel() + 1); }
 function getPatienceRate() { return 2.8 * (1 + getDifficultyLevel() * 0.16); }
-
-// 【改善】注文フキダシ表示時間（長さ）を長めに拡大 (1.6~3.2s -> 3.5~6.0s)
 function getRevealDuration() { return Math.max(3.5, 6.0 - getDifficultyLevel() * 0.4); }
 function getRespawnDelay(base) { return Math.max(base * 0.4, base - getDifficultyLevel() * 60); }
 
@@ -946,27 +938,25 @@ function spawnCustomer(slot) {
     const keys = Object.keys(TOPPINGS);
     const rKey = keys[Math.floor(Math.random() * keys.length)];
     const isSabiNuki = (TOPPINGS[rKey].category === 'nigiri') ? (Math.random() < 0.3) : false;
-
-    // 【新要素】金持ち客（VIP）の実装（20%の確率で出現）
     const isVip = Math.random() < 0.20;
-
-    // 【改善】客ごとに我慢ゲージの減り速度の差（0.7〜1.5倍のランダム個性）
     const speedFactor = 0.7 + Math.random() * 0.8;
 
     customers.push({
         slot,
         key: rKey,
         category: TOPPINGS[rKey].category,
-        price: TOPPINGS[rKey].price * (isVip ? 3 : 1), // 金持ちは売上3倍
+        price: TOPPINGS[rKey].price * (isVip ? 3 : 1),
         name: TOPPINGS[rKey].name,
         isSabiNuki: isSabiNuki,
         isVip: isVip,
-        eatenCount: 0, // 食べた皿数（満腹退店判定用）
+        eatenCount: 0,
         patience: 100,
         maxPatience: 100,
         patienceSpeedFactor: speedFactor,
         revealTimer: getRevealDuration(),
-        revealDuration: getRevealDuration()
+        revealDuration: getRevealDuration(),
+        // モグモグ（食事中）タイマー：初期値0（すぐに注文中）
+        eatingTimer: 0
     });
 }
 
@@ -994,7 +984,8 @@ function getPreparedSushi() {
 
 function serveCustomer(idx) {
     const c = customers[idx];
-    if (!c) return;
+    if (!c || c.eatingTimer > 0) return; // モグモグ中の客には提供できない
+
     const sushi = getPreparedSushi();
     if (!sushi) { sfx.playTap(); return; }
 
@@ -1006,37 +997,34 @@ function serveCustomer(idx) {
     }
 
     if (isMatch) {
-        // 成功したら連続見逃しカウントをリセット
-        consecutiveMisses = 0;
-        
         score += c.price;
         servedCount++;
         c.eatenCount++;
-        rating = Math.min(MAX_RATING, rating + (c.isVip ? 0.7 : 0.35));
         
         if (c.isVip) sfx.playVipSuccess();
         else sfx.playSuccess();
 
         cuttingBoard = [];
 
-        // 【新要素】ある程度（3皿）食べたら満腹で満足して帰る
+        // 3皿食べたら満足して退店
         if (c.eatenCount >= 3) {
+            // 【変更】満足して帰ると評判がアップ（+0.5）
+            rating = Math.min(MAX_RATING, rating + 0.5);
+
             const slot = c.slot;
             customers.splice(idx, 1);
             unlockNewSeatsIfNeeded();
             setTimeout(() => spawnCustomer(slot), getRespawnDelay(400));
         } else {
-            // 次の注文のためにフキダシとゲージをリセットして再注文
-            const keys = Object.keys(TOPPINGS);
-            const rKey = keys[Math.floor(Math.random() * keys.length)];
-            c.key = rKey;
-            c.category = TOPPINGS[rKey].category;
-            c.price = TOPPINGS[rKey].price * (c.isVip ? 3 : 1);
-            c.isSabiNuki = (TOPPINGS[rKey].category === 'nigiri') ? (Math.random() < 0.3) : false;
+            // 提供成功（1～2皿目）で少し評判アップ
+            rating = Math.min(MAX_RATING, rating + 0.15);
+
+            // 【変更】食後はすぐ注文せずランダム時間（1.5秒〜4.0秒）のモグモグタイムに入る
+            c.eatingTimer = 1.5 + Math.random() * 2.5;
             c.patience = 100;
-            c.revealTimer = getRevealDuration();
         }
     } else {
+        // 誤提供で評判ダウン
         rating = Math.max(0, rating - 0.5);
         cuttingBoard = [];
         sfx.playError();
@@ -1048,30 +1036,43 @@ function update(dt) {
     if (state !== STATE.PLAYING) return;
     const basePatienceRate = getPatienceRate();
 
-    if (warningMessageTimer > 0) {
-        warningMessageTimer -= dt;
-    }
-
     for (let i = customers.length - 1; i >= 0; i--) {
         const c = customers[i];
+
+        // 食事中（モグモグタイム）の判定
+        if (c.eatingTimer > 0) {
+            c.eatingTimer -= dt;
+            if (c.eatingTimer <= 0) {
+                // 食事完了後、次の注文を生成
+                c.eatingTimer = 0;
+                const keys = Object.keys(TOPPINGS);
+                const rKey = keys[Math.floor(Math.random() * keys.length)];
+                c.key = rKey;
+                c.category = TOPPINGS[rKey].category;
+                c.price = TOPPINGS[rKey].price * (c.isVip ? 3 : 1);
+                c.isSabiNuki = (TOPPINGS[rKey].category === 'nigiri') ? (Math.random() < 0.3) : false;
+                c.patience = 100;
+                c.revealTimer = getRevealDuration();
+            }
+            continue; // 食事中は我慢ゲージを減らさない
+        }
+
         if (c.revealTimer > 0) c.revealTimer = Math.max(0, c.revealTimer - dt);
 
-        // 客個々のスピード倍率を適用
         c.patience -= dt * basePatienceRate * c.patienceSpeedFactor;
 
+        // 【変更】我慢限界（見逃し）時の処理
         if (c.patience <= 0) {
             const slot = c.slot;
-            rating -= 1.5;
+            // 【変更】見逃しでその客が怒って帰る＆評判ダウン
+            rating = Math.max(0, rating - 0.8);
             customers.splice(i, 1);
             sfx.playError();
 
-            // 【新要素】連続で見逃した場合のペナルティ処理
-            consecutiveMisses++;
-            warningMessageTimer = 1.8; // 画面に警告表示メッセージ
-
-            if (rating <= 0 || consecutiveMisses >= 3) {
+            if (rating <= 0) {
                 endGame();
             } else {
+                // そのスロットに新しい客を補充
                 setTimeout(() => spawnCustomer(slot), getRespawnDelay(600));
             }
         }
@@ -1129,22 +1130,18 @@ const CUSTOMER_STYLES = [
     { hair: '#2a2a2a', shirt: '#8a4fae' }
 ];
 
-// 【改善】金持ち客（VIP）および通常客の描画
-function drawCustomerBust(ctx, cx, cy, styleIdx, isVip) {
+function drawCustomerBust(ctx, cx, cy, styleIdx, isVip, isEating) {
     if (isVip) {
-        // 金持ち客の後光エフェクト
         ctx.save();
         ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 18;
         ctx.fillStyle = '#e8ac10';
         ctx.beginPath(); ctx.arc(cx, cy-8, 28, 0, Math.PI*2); ctx.fill();
         ctx.restore();
 
-        // 金の着物
         ctx.fillStyle = '#d4af37';
         ctx.beginPath(); ctx.roundRect(cx-30, cy+8, 60, 42, {topLeft:18, topRight:18, bottomLeft:0, bottomRight:0}); ctx.fill();
         ctx.fillStyle = '#f0c49a'; ctx.fillRect(cx-8, cy+2, 16, 14);
         ctx.fillStyle = '#f7d3ab'; ctx.beginPath(); ctx.arc(cx, cy-8, 20, 0, Math.PI*2); ctx.fill();
-        // 黒髪チョンマゲ風
         ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(cx, cy-14, 21, Math.PI, 0); ctx.fill();
         ctx.fillStyle = '#2c2c2c';
         ctx.beginPath(); ctx.arc(cx-7, cy-8, 2, 0, Math.PI*2); ctx.arc(cx+7, cy-8, 2, 0, Math.PI*2); ctx.fill();
@@ -1161,6 +1158,14 @@ function drawCustomerBust(ctx, cx, cy, styleIdx, isVip) {
         ctx.fillStyle = '#2c2c2c'; ctx.beginPath(); ctx.arc(cx-7, cy-8, 2, 0, Math.PI*2); ctx.arc(cx+7, cy-8, 2, 0, Math.PI*2); ctx.fill();
         ctx.strokeStyle = '#a35c3c'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(cx, cy-2, 5, 0.1*Math.PI, 0.9*Math.PI); ctx.stroke();
+    }
+
+    // 食事中（モグモグ）アイコン吹き出し表示
+    if (isEating) {
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.arc(cx, cy-35, 14, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#1c3d5f'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('🎵', cx, cy-31);
     }
 }
 
@@ -1304,11 +1309,6 @@ function draw() {
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 42px serif'; ctx.fillText('本日の営業終了', GAME_WIDTH/2, 340);
         ctx.fillStyle = '#e6c877'; ctx.font = 'bold 32px sans-serif'; ctx.fillText(`本日の売上 ￥${score}`, GAME_WIDTH/2, 400);
 
-        if (consecutiveMisses >= 3) {
-            ctx.fillStyle = '#ff6b6b'; ctx.font = '15px sans-serif';
-            ctx.fillText('※連続見逃しによりお客さんが全員帰ってしまいました', GAME_WIDTH/2, 440);
-        }
-
         drawCard(ctx, 100, 560, 280, 62, '#1c3d5f');
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.fillText('また明日、タイトルへ', GAME_WIDTH/2, 599);
         ctx.textAlign = 'left';
@@ -1332,8 +1332,8 @@ function draw() {
         const c = customers.find(cc => cc.slot === i);
         if (!c) continue;
 
-        // 注文の吹き出し
-        if (c.revealTimer > 0) {
+        // 食事中以外に注文吹き出し表示
+        if (c.eatingTimer <= 0 && c.revealTimer > 0) {
             const bw = 82, bh = 58, by = 95;
             const bx = slotCx - bw/2;
             const alpha = c.revealTimer < 0.5 ? c.revealTimer/0.5 : 1;
@@ -1357,24 +1357,17 @@ function draw() {
             ctx.globalAlpha = 1;
         }
 
-        drawCustomerBust(ctx, slotCx, 205, i, c.isVip);
+        drawCustomerBust(ctx, slotCx, 205, i, c.isVip, c.eatingTimer > 0);
 
-        // 我慢メーター
-        const tRatio = Math.max(0, c.patience / c.maxPatience);
-        const barW = 56;
-        drawWashiCard(ctx, slotCx-barW/2-4, 165, barW+8, 13, 6);
-        ctx.fillStyle = 'rgba(28,61,95,0.2)'; ctx.fillRect(slotCx-barW/2, 169, barW, 4);
-        ctx.fillStyle = tRatio > 0.3 ? '#3a7d44' : '#d9381e';
-        ctx.fillRect(slotCx-barW/2, 169, barW*tRatio, 4);
-    }
-
-    // 連続見逃し警告メッセージ表示
-    if (warningMessageTimer > 0) {
-        ctx.fillStyle = 'rgba(217,56,30,0.85)';
-        ctx.fillRect(0, 220, GAME_WIDTH, 26);
-        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`⚠️ 連続見逃し中！ (${consecutiveMisses}/3)`, GAME_WIDTH/2, 237);
-        ctx.textAlign = 'left';
+        // 我慢メーター（食事中はゲージ減少停止）
+        if (c.eatingTimer <= 0) {
+            const tRatio = Math.max(0, c.patience / c.maxPatience);
+            const barW = 56;
+            drawWashiCard(ctx, slotCx-barW/2-4, 165, barW+8, 13, 6);
+            ctx.fillStyle = 'rgba(28,61,95,0.2)'; ctx.fillRect(slotCx-barW/2, 169, barW, 4);
+            ctx.fillStyle = tRatio > 0.3 ? '#3a7d44' : '#d9381e';
+            ctx.fillRect(slotCx-barW/2, 169, barW*tRatio, 4);
+        }
     }
 
     // カウンターの縁
