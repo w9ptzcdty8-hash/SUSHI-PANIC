@@ -582,7 +582,6 @@ function renderUniCluster(cCtx, cx, cy, rx, ry, spacing) {
         path.quadraticCurveTo(-10, -8, -2, -6);
         path.quadraticCurveTo(4, -9, 9, -3);
         path.quadraticCurveTo(13, 2, 8, 6);
-        path.quadraticCurveTo(2, 9, -4, 6);
         path.quadraticCurveTo(-10, 7, -14, 0);
         path.closePath();
         const pal = palettes[Math.floor(Math.random()*palettes.length)];
@@ -903,11 +902,19 @@ function handleTouch(x, y) {
             sfx.playTap();
         }
     } else if (state === STATE.HOWTO) {
-        // 「タイトルへ戻る」ボタン判定（また画面全体タップでもタイトルへ）
-        goToTitle(); sfx.playTap();
+        // タイトルへ戻るボタン判定 (X: 100~380, Y: 755~815)
+        if (vx >= 100 && vx <= 380 && vy >= 755 && vy <= 815) {
+            goToTitle(); sfx.playTap();
+        } else {
+            goToTitle(); sfx.playTap();
+        }
     } else if (state === STATE.HIGHSCORE) {
-        // 「タイトルへ戻る」ボタン判定（また画面全体タップでもタイトルへ）
-        goToTitle(); sfx.playTap();
+        // タイトルへ戻るボタン判定 (X: 100~380, Y: 745~805)
+        if (vx >= 100 && vx <= 380 && vy >= 745 && vy <= 805) {
+            goToTitle(); sfx.playTap();
+        } else {
+            goToTitle(); sfx.playTap();
+        }
     } else if (state === STATE.PAUSED) {
         if (vy >= 350 && vy <= 410 && vx >= 100 && vx <= 380) { resumeGame(); sfx.playTap(); }
         else if (vy >= 430 && vy <= 490 && vx >= 100 && vx <= 380) { startGame(); sfx.playTap(); }
@@ -959,8 +966,8 @@ function initInputHandlers() {
     }, { passive: false });
 }
 
-// --- 難易度設定 ---
-const SCORE_THRESHOLDS = [0, 1500, 3000, 5000, 8000];
+// --- 難易度設定（変更後：1500, 4500, 10000, 20000） ---
+const SCORE_THRESHOLDS = [0, 1500, 4500, 10000, 20000];
 let unlockedSlots = 1;
 
 function getDifficultyLevel() {
@@ -1346,10 +1353,10 @@ function draw() {
             ctx.fillText(r.note, GAME_WIDTH/2, r.top + 185);
         });
 
-        // 「タイトルへ戻る」ボタン
-        drawCard(ctx, 140, 765, 200, 52, '#1c3d5f');
-        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 18px serif';
-        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 798);
+        // 「タイトルへ戻る」ボタン（幅280pxに拡大し文字はみ出し防止）
+        drawCard(ctx, 100, 755, 280, 60, '#1c3d5f');
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif';
+        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 793);
 
         ctx.textAlign = 'left';
         return;
@@ -1387,10 +1394,10 @@ function draw() {
             });
         }
 
-        // 「タイトルへ戻る」ボタン
-        drawCard(ctx, 140, 745, 200, 52, '#1c3d5f');
-        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 18px serif';
-        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 778);
+        // 「タイトルへ戻る」ボタン（幅280pxに拡大し文字はみ出し防止）
+        drawCard(ctx, 100, 745, 280, 60, '#1c3d5f');
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif';
+        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 783);
 
         ctx.textAlign = 'left';
         return;
@@ -1428,10 +1435,8 @@ function draw() {
         const c = customers.find(cc => cc.slot === i);
         if (!c) continue;
 
-        // 我慢ゲージが35%以下で怒り状態（見逃し直前）
         const isAngry = c.patience <= 35 && c.eatingTimer <= 0;
 
-        // 食事中以外に注文吹き出し表示（我慢限界ギリギリ時は吹き出しを強制表示して警告）
         if (c.eatingTimer <= 0 && (c.revealTimer > 0 || isAngry)) {
             const bw = 82, bh = 58, by = 95;
             const bx = slotCx - bw/2;
@@ -1453,7 +1458,6 @@ function draw() {
                 ctx.fillStyle = '#b8860b'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
                 ctx.fillText('★VIP★', slotCx, by+10);
             }
-            // 怒り状態の場合、フキダシ右上にも💢表示
             if (isAngry) {
                 ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
                 ctx.fillText('💢', bx + bw - 6, by + 14);
