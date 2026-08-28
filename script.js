@@ -582,6 +582,7 @@ function renderUniCluster(cCtx, cx, cy, rx, ry, spacing) {
         path.quadraticCurveTo(-10, -8, -2, -6);
         path.quadraticCurveTo(4, -9, 9, -3);
         path.quadraticCurveTo(13, 2, 8, 6);
+        path.quadraticCurveTo(2, 9, -4, 6);
         path.quadraticCurveTo(-10, 7, -14, 0);
         path.closePath();
         const pal = palettes[Math.floor(Math.random()*palettes.length)];
@@ -902,19 +903,9 @@ function handleTouch(x, y) {
             sfx.playTap();
         }
     } else if (state === STATE.HOWTO) {
-        // タイトルへ戻るボタン判定 (X: 100~380, Y: 755~815)
-        if (vx >= 100 && vx <= 380 && vy >= 755 && vy <= 815) {
-            goToTitle(); sfx.playTap();
-        } else {
-            goToTitle(); sfx.playTap();
-        }
+        goToTitle(); sfx.playTap();
     } else if (state === STATE.HIGHSCORE) {
-        // タイトルへ戻るボタン判定 (X: 100~380, Y: 745~805)
-        if (vx >= 100 && vx <= 380 && vy >= 745 && vy <= 805) {
-            goToTitle(); sfx.playTap();
-        } else {
-            goToTitle(); sfx.playTap();
-        }
+        goToTitle(); sfx.playTap();
     } else if (state === STATE.PAUSED) {
         if (vy >= 350 && vy <= 410 && vx >= 100 && vx <= 380) { resumeGame(); sfx.playTap(); }
         else if (vy >= 430 && vy <= 490 && vx >= 100 && vx <= 380) { startGame(); sfx.playTap(); }
@@ -966,7 +957,7 @@ function initInputHandlers() {
     }, { passive: false });
 }
 
-// --- 難易度設定（変更後：1500, 4500, 10000, 20000） ---
+// --- 難易度設定 ---
 const SCORE_THRESHOLDS = [0, 1500, 4500, 10000, 20000];
 let unlockedSlots = 1;
 
@@ -1215,7 +1206,6 @@ function drawCustomerBust(ctx, cx, cy, styleIdx, isVip, isEating, isAngry) {
         ctx.fillStyle = '#1c3d5f'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText('🎵', cx, cy-31);
     } else if (isAngry) {
-        // 見逃し間近の怒りマーク（💢）を表示
         ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText('💢', cx + 18, cy - 25);
     }
@@ -1353,9 +1343,9 @@ function draw() {
             ctx.fillText(r.note, GAME_WIDTH/2, r.top + 185);
         });
 
-        // 「タイトルへ戻る」ボタン（幅280pxに拡大し文字はみ出し防止）
+        // 「タイトルへ戻る」ボタン
         drawCard(ctx, 100, 755, 280, 60, '#1c3d5f');
-        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif';
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
         ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 793);
 
         ctx.textAlign = 'left';
@@ -1394,9 +1384,9 @@ function draw() {
             });
         }
 
-        // 「タイトルへ戻る」ボタン（幅280pxに拡大し文字はみ出し防止）
+        // 「タイトルへ戻る」ボタン（文字中央揃えを明示）
         drawCard(ctx, 100, 745, 280, 60, '#1c3d5f');
-        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif';
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
         ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 783);
 
         ctx.textAlign = 'left';
