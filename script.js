@@ -671,15 +671,15 @@ function renderShari(cCtx, w, h) {
 
 // ネタデータ
 const TOPPINGS = {
-    maguro: { name: 'マグロ', category: 'nigiri', price: 500 },
-    salmon: { name: 'サーモン', category: 'nigiri', price: 600 },
-    ikura:  { name: 'イクラ',  category: 'gunkan', price: 800 },
-    tamago: { name: 'たまご', category: 'tamago', price: 300 },
-    ebi:    { name: 'エビ',    category: 'nigiri', price: 450 },
-    buri:   { name: 'ぶり',    category: 'nigiri', price: 700 },
-    uni:    { name: 'ウニ',    category: 'gunkan', price: 850 },
-    anago:  { name: 'アナゴ', category: 'tamago', price: 750 },
-    ika:    { name: 'イカ',    category: 'nigiri', price: 400 }
+    maguro: { name: 'マグロ', category: 'nigiri', price: 300 },
+    salmon: { name: 'サーモン', category: 'nigiri', price: 300 },
+    ikura:  { name: 'イクラ',  category: 'gunkan', price: 500 },
+    tamago: { name: 'たまご', category: 'tamago', price: 200 },
+    ebi:    { name: 'エビ',    category: 'nigiri', price: 400 },
+    buri:   { name: 'ぶり',    category: 'nigiri', price: 500 },
+    uni:    { name: 'ウニ',    category: 'gunkan', price: 700 },
+    anago:  { name: 'アナゴ', category: 'tamago', price: 500 },
+    ika:    { name: 'イカ',    category: 'nigiri', price: 300 }
 };
 
 function initAssets() {
