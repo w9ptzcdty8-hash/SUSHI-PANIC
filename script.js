@@ -897,12 +897,16 @@ function handleTouch(x, y) {
         else if (vx >= 90 && vx <= 230 && vy >= 716 && vy <= 766) { goToHowto(); sfx.playTap(); }
         // ハイスコア
         else if (vx >= 250 && vx <= 390 && vy >= 716 && vy <= 766) { goToHighscore(); sfx.playTap(); }
-        // MRS GAMES リンク（ポップアップ回避：同一画面で遷移）
+        // MRS GAMES リンク
         else if (vx >= 140 && vx <= 340 && vy >= 780 && vy <= 830) {
             window.location.href = 'https://mrs-games.pages.dev';
             sfx.playTap();
         }
-    } else if (state === STATE.HOWTO || state === STATE.HIGHSCORE) {
+    } else if (state === STATE.HOWTO) {
+        // 「タイトルへ戻る」ボタン判定（また画面全体タップでもタイトルへ）
+        goToTitle(); sfx.playTap();
+    } else if (state === STATE.HIGHSCORE) {
+        // 「タイトルへ戻る」ボタン判定（また画面全体タップでもタイトルへ）
         goToTitle(); sfx.playTap();
     } else if (state === STATE.PAUSED) {
         if (vy >= 350 && vy <= 410 && vx >= 100 && vx <= 380) { resumeGame(); sfx.playTap(); }
@@ -955,7 +959,7 @@ function initInputHandlers() {
     }, { passive: false });
 }
 
-// --- 難易度設定（スコアに応じて客数が1人〜5人に段階開放） ---
+// --- 難易度設定 ---
 const SCORE_THRESHOLDS = [0, 900, 2200, 4200, 6800];
 let unlockedSlots = 1;
 
@@ -1055,7 +1059,6 @@ function serveCustomer(idx) {
 
         cuttingBoard = [];
 
-        // スコア増加に伴う1人〜5人の段階開放をチェック
         unlockNewSeatsIfNeeded();
 
         if (c.eatenCount >= 3) {
@@ -1169,7 +1172,7 @@ const CUSTOMER_STYLES = [
     { hair: '#2a2a2a', shirt: '#8a4fae' }
 ];
 
-function drawCustomerBust(ctx, cx, cy, styleIdx, isVip, isEating) {
+function drawCustomerBust(ctx, cx, cy, styleIdx, isVip, isEating, isAngry) {
     if (isVip) {
         ctx.save();
         ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 18;
@@ -1204,6 +1207,10 @@ function drawCustomerBust(ctx, cx, cy, styleIdx, isVip, isEating) {
         ctx.beginPath(); ctx.arc(cx, cy-35, 14, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#1c3d5f'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText('🎵', cx, cy-31);
+    } else if (isAngry) {
+        // 見逃し間近の怒りマーク（💢）を表示
+        ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('💢', cx + 18, cy - 25);
     }
 }
 
@@ -1286,12 +1293,10 @@ function draw() {
         ctx.fillStyle = '#f4eee6'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 26px serif';
-        ctx.fillText('作り方', GAME_WIDTH/2, 44);
-        ctx.fillStyle = 'rgba(28,61,95,0.6)'; ctx.font = '11px sans-serif';
-        ctx.fillText('画面をタップでタイトルへ戻る', GAME_WIDTH/2, 64);
+        ctx.fillText('作り方', GAME_WIDTH/2, 40);
 
         const rows = [
-            { top: 75, num: '①', title: 'にぎり', sub: 'マグロ・サーモン・エビ・ぶり・イカ',
+            { top: 65, num: '①', title: 'にぎり', sub: 'マグロ・サーモン・エビ・ぶり・イカ',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
@@ -1303,7 +1308,7 @@ function draw() {
               ],
               note: 'わさびを抜けば「サビ抜き」の注文にも対応できる'
             },
-            { top: 305, num: '②', title: '軍艦（ぐんかん）', sub: 'いくら・うに',
+            { top: 290, num: '②', title: '軍艦（ぐんかん）', sub: 'いくら・うに',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
@@ -1315,7 +1320,7 @@ function draw() {
               ],
               note: 'のりを先に巻いてから、ネタを盛りつける'
             },
-            { top: 535, num: '③', title: 'たまご・アナゴ', sub: 'たまご・アナゴ',
+            { top: 515, num: '③', title: 'たまご・アナゴ', sub: 'たまご・アナゴ',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
@@ -1341,6 +1346,11 @@ function draw() {
             ctx.fillText(r.note, GAME_WIDTH/2, r.top + 185);
         });
 
+        // 「タイトルへ戻る」ボタン
+        drawCard(ctx, 140, 765, 200, 52, '#1c3d5f');
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 18px serif';
+        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 798);
+
         ctx.textAlign = 'left';
         return;
     }
@@ -1350,34 +1360,37 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 28px serif';
         ctx.fillText('歴代ハイスコア', GAME_WIDTH/2, 60);
-        ctx.fillStyle = 'rgba(28,61,95,0.6)'; ctx.font = '12px sans-serif';
-        ctx.fillText('画面をタップでタイトルへ戻る', GAME_WIDTH/2, 85);
 
         const scores = getHighScores();
         if (scores.length === 0) {
             ctx.fillStyle = '#1c3d5f'; ctx.font = '18px serif';
             ctx.fillText('記録がありません', GAME_WIDTH/2, 350);
         } else {
-            const startY = 130;
-            const rowH = 110;
+            const startY = 110;
+            const rowH = 105;
             const medals = ['🥇', '🥈', '🥉', '4位', '5位'];
 
             scores.forEach((sc, i) => {
                 const y = startY + i * rowH;
-                drawWashiCard(ctx, 40, y, 400, 90, 14);
+                drawWashiCard(ctx, 40, y, 400, 85, 14);
 
                 ctx.fillStyle = '#1c3d5f';
                 ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'left';
-                ctx.fillText(medals[i], 60, y + 52);
+                ctx.fillText(medals[i], 60, y + 50);
 
                 ctx.font = 'bold 26px serif'; ctx.textAlign = 'right';
                 ctx.fillStyle = '#d9381e';
-                ctx.fillText(`￥${sc.score.toLocaleString()}`, 410, y + 45);
+                ctx.fillText(`￥${sc.score.toLocaleString()}`, 410, y + 43);
 
                 ctx.font = '12px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.6)';
-                ctx.fillText(sc.date, 410, y + 70);
+                ctx.fillText(sc.date, 410, y + 68);
             });
         }
+
+        // 「タイトルへ戻る」ボタン
+        drawCard(ctx, 140, 745, 200, 52, '#1c3d5f');
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 18px serif';
+        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 778);
 
         ctx.textAlign = 'left';
         return;
@@ -1415,10 +1428,14 @@ function draw() {
         const c = customers.find(cc => cc.slot === i);
         if (!c) continue;
 
-        if (c.eatingTimer <= 0 && c.revealTimer > 0) {
+        // 我慢ゲージが35%以下で怒り状態（見逃し直前）
+        const isAngry = c.patience <= 35 && c.eatingTimer <= 0;
+
+        // 食事中以外に注文吹き出し表示（我慢限界ギリギリ時は吹き出しを強制表示して警告）
+        if (c.eatingTimer <= 0 && (c.revealTimer > 0 || isAngry)) {
             const bw = 82, bh = 58, by = 95;
             const bx = slotCx - bw/2;
-            const alpha = c.revealTimer < 0.5 ? c.revealTimer/0.5 : 1;
+            const alpha = (c.revealTimer < 0.5 && !isAngry) ? c.revealTimer/0.5 : 1;
             ctx.globalAlpha = alpha;
             drawWashiCard(ctx, bx, by, bw, bh, 12);
             ctx.fillStyle = '#f6ecd9';
@@ -1436,10 +1453,15 @@ function draw() {
                 ctx.fillStyle = '#b8860b'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
                 ctx.fillText('★VIP★', slotCx, by+10);
             }
+            // 怒り状態の場合、フキダシ右上にも💢表示
+            if (isAngry) {
+                ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('💢', bx + bw - 6, by + 14);
+            }
             ctx.globalAlpha = 1;
         }
 
-        drawCustomerBust(ctx, slotCx, 205, i, c.isVip, c.eatingTimer > 0);
+        drawCustomerBust(ctx, slotCx, 205, i, c.isVip, c.eatingTimer > 0, isAngry);
 
         if (c.eatingTimer <= 0) {
             const tRatio = Math.max(0, c.patience / c.maxPatience);
