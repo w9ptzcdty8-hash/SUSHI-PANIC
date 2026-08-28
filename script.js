@@ -960,7 +960,7 @@ function initInputHandlers() {
 }
 
 // --- 難易度設定 ---
-const SCORE_THRESHOLDS = [0, 900, 2200, 4200, 6800];
+const SCORE_THRESHOLDS = [0, 1500, 3000, 5000, 8000];
 let unlockedSlots = 1;
 
 function getDifficultyLevel() {
