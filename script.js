@@ -740,7 +740,7 @@ let customers = [];
 let cuttingBoard = [];
 let elapsedTime = 0;
 
-// 【新規】電光掲示板（テロップ）用メッセージ管理
+// 電光掲示板（テロップ）用メッセージ管理
 let tickerQueue = [];
 let currentTickerText = "";
 let tickerX = GAME_WIDTH;
@@ -1056,7 +1056,7 @@ function handleTouchDown(x, y) {
         if (item) {
             justCompletedReload = false;
 
-            // 【変更】まな板の状態に関わらず、在庫が9個以下なら長押し補充判定を開始
+            // まな板の状態に関わらず、在庫が9個以下なら長押し補充判定を開始
             if (TOPPINGS[item] && ingredientStock[item] < MAX_STOCK) {
                 reloadingItem = item;
                 holdTimer = 0;
@@ -1105,7 +1105,7 @@ function addIngredient(item) {
     // ネタアイテムの場合のみ在庫減少
     if (TOPPINGS[item]) {
         ingredientStock[item]--;
-        // 【新規】在庫が0になったら電光掲示板に警告追加
+        // 在庫が0になったら電光掲示板に警告追加
         if (ingredientStock[item] === 0) {
             addTickerMessage(`⚠️ ${TOPPINGS[item].name}が在庫切れ！`);
         }
@@ -1260,7 +1260,7 @@ function serveCustomer(idx) {
             c.patience = 100;
         }
     } else {
-        // 【変更】覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）かつ電光掲示板に警告表示
+        // 覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）かつ電光掲示板に警告表示
         const penalty = c.isInspector ? (RATING_CONFIG.MISS_SERVE * 2) : RATING_CONFIG.MISS_SERVE;
         if (c.isInspector) {
             addTickerMessage('⚠️ 覆面調査員による減点！');
@@ -1275,7 +1275,7 @@ function serveCustomer(idx) {
 function update(dt) {
     if (state !== STATE.PLAYING) return;
 
-    // 【変更】長押し補充タイマーの進捗処理（まな板に関わらず動作）
+    // 長押し補充タイマーの進捗処理（まな板に関わらず動作）
     if (reloadingItem) {
         holdTimer += dt;
         if (holdTimer >= HOLD_TIME_REQUIRED) {
@@ -1287,7 +1287,7 @@ function update(dt) {
         }
     }
 
-    // 【新規】電光掲示板（マーキーテロップ）更新ロジック
+    // 電光掲示板（マーキーテロップ）更新ロジック
     if (!currentTickerText && tickerQueue.length > 0) {
         currentTickerText = tickerQueue.shift();
         tickerX = GAME_WIDTH;
@@ -1331,7 +1331,7 @@ function update(dt) {
         if (c.patience <= 0) {
             const slot = c.slot;
 
-            // 【変更】覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ電光掲示板に警告表示
+            // 覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ電光掲示板に警告表示
             const penalty = c.isInspector ? (RATING_CONFIG.MISS_TIMEOUT * 2) : RATING_CONFIG.MISS_TIMEOUT;
             if (c.isInspector) {
                 addTickerMessage('⚠️ 覆面調査員による減点！');
@@ -1482,7 +1482,7 @@ function drawReloadProgress(cx, cy, progress) {
     ctx.restore();
 }
 
-// 【変更】パレットに在庫数、点滅表示、および「売切御免！」帯を描画
+// パレットに在庫数、点滅表示、および「売切御免！」帯を描画
 function drawStockOverlay(px, py, w, h, key) {
     if (!TOPPINGS[key]) return;
 
@@ -1591,26 +1591,26 @@ function draw() {
         ctx.fillStyle = '#f4eee6'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 26px serif';
-        ctx.fillText('作り方', GAME_WIDTH/2, 40);
+        ctx.fillText('作り方・ルール', GAME_WIDTH/2, 38);
 
         const rows = [
-            { top: 65, num: '①', title: 'にぎり', sub: 'マグロ・サーモン・エビ・ぶり・イカ',
+            { top: 55, num: '①', title: 'にぎり', sub: 'マグロ・サーモン・エビ・ぶり・イカ',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
-                  { type: 'icon', key: 'wasabi_plate', label: 'わさび', w: 44, h: 44 },
+                  { type: 'icon', key: 'wasabi_plate', label: 'わさび', w: 40, h: 40 },
                   { type: 'symbol', text: '＋' },
                   { type: 'icon', key: 'salmon', label: 'ネタ' },
                   { type: 'symbol', text: '＝' },
                   { type: 'result', key: 'salmon', sabiNuki: false, label: '完成' }
               ],
-              note: 'わさびを抜けば「サビ抜き」の注文にも対応できる'
+              note: 'わさびを抜けば「サビ抜き」の注文に対応できる'
             },
-            { top: 290, num: '②', title: '軍艦（ぐんかん）', sub: 'いくら・うに',
+            { top: 235, num: '②', title: '軍艦（ぐんかん）', sub: 'いくら・うに',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
-                  { type: 'icon', key: 'nori_plate', label: 'のり', w: 44, h: 44 },
+                  { type: 'icon', key: 'nori_plate', label: 'のり', w: 40, h: 40 },
                   { type: 'symbol', text: '＋' },
                   { type: 'icon', key: 'ikura_bowl', label: 'ネタ' },
                   { type: 'symbol', text: '＝' },
@@ -1618,13 +1618,13 @@ function draw() {
               ],
               note: 'のりを先に巻いてから、ネタを盛りつける'
             },
-            { top: 515, num: '③', title: 'たまご・アナゴ', sub: 'たまご・アナゴ',
+            { top: 415, num: '③', title: 'たまご・アナゴ', sub: 'たまご・アナゴ',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
                   { type: 'icon', key: 'tamago', label: 'ネタ' },
                   { type: 'symbol', text: '＋' },
-                  { type: 'icon', key: 'nori_plate', label: 'のり', w: 44, h: 44 },
+                  { type: 'icon', key: 'nori_plate', label: 'のり', w: 40, h: 40 },
                   { type: 'symbol', text: '＝' },
                   { type: 'result', key: 'tamago', sabiNuki: false, label: '完成' }
               ],
@@ -1633,20 +1633,45 @@ function draw() {
         ];
 
         rows.forEach(r => {
-            ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
-            ctx.fillText(`${r.num} ${r.title}`, GAME_WIDTH/2, r.top + 26);
-            ctx.font = '12px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.7)';
-            ctx.fillText(r.sub, GAME_WIDTH/2, r.top + 46);
+            ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 18px serif'; ctx.textAlign = 'center';
+            ctx.fillText(`${r.num} ${r.title}`, GAME_WIDTH/2, r.top + 20);
+            ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.7)';
+            ctx.fillText(r.sub, GAME_WIDTH/2, r.top + 36);
 
-            drawHowtoFormula(ctx, r.top + 112, r.formula);
+            drawHowtoFormula(ctx, r.top + 90, r.formula);
 
-            ctx.fillStyle = 'rgba(28,61,95,0.75)'; ctx.font = '11px sans-serif';
-            ctx.fillText(r.note, GAME_WIDTH/2, r.top + 185);
+            ctx.fillStyle = 'rgba(28,61,95,0.75)'; ctx.font = '10px sans-serif';
+            ctx.fillText(r.note, GAME_WIDTH/2, r.top + 150);
         });
 
-        drawCard(ctx, 100, 755, 280, 60, '#1c3d5f');
+        // 【新規】④ ネタ切れと仕入れ（補充）セクションの描画
+        const r4Top = 595;
+        ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 18px serif'; ctx.textAlign = 'center';
+        ctx.fillText('④ ネタ切れと仕入れ（補充）', GAME_WIDTH/2, r4Top + 20);
+        ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.7)';
+        ctx.fillText('各ネタの最大在庫は10個（シャリ・わさび・海苔は無限）', GAME_WIDTH/2, r4Top + 36);
+
+        // ミニサンプルの描画
+        ctx.save();
+        // 左：売切表示サンプル
+        drawWashiCard(ctx, 80, r4Top + 48, 140, 50, 10);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.roundRect(80, r4Top + 48, 140, 50, 10); ctx.fill();
+        ctx.strokeStyle = '#d9381e'; ctx.lineWidth = 3; ctx.strokeRect(81, r4Top + 49, 138, 48);
+        ctx.fillStyle = '#d9381e'; ctx.fillRect(90, r4Top + 63, 120, 20);
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 12px serif'; ctx.fillText('売切御免！', 150, r4Top + 77);
+
+        // 右：補充完了サンプル
+        drawWashiCard(ctx, 260, r4Top + 48, 140, 50, 10);
+        ctx.fillStyle = '#3a7d44'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('仕入れ完了！', 330, r4Top + 72);
+        ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 11px sans-serif'; ctx.fillText('x10', 385, r4Top + 90);
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(28,61,95,0.85)'; ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('使いたいネタのカードを【長押し（約0.8秒）】でいつでも補充可能！', GAME_WIDTH/2, r4Top + 120);
+
+        drawCard(ctx, 100, 765, 280, 55, '#1c3d5f');
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
-        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 793);
+        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 800);
 
         ctx.textAlign = 'left';
         return;
@@ -1718,7 +1743,7 @@ function draw() {
     drawWashiCard(ctx, 410, 10, 58, 45);
     ctx.fillStyle = '#1c3d5f'; ctx.fillRect(430, 20, 6, 25); ctx.fillRect(442, 20, 6, 25);
 
-    // 【新規】画面横いっぱいの電光掲示板（マーキーテロップ表示）
+    // 画面横いっぱいの電光掲示板（マーキーテロップ表示）
     if (currentTickerText) {
         ctx.save();
         ctx.fillStyle = 'rgba(15, 15, 15, 0.9)';
