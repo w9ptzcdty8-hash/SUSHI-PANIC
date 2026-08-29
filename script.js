@@ -756,6 +756,7 @@ let reloadingItem = null;
 let holdTimer = 0;
 let justCompletedReload = false; // 長押し完了直後のタップ誤判定防止用
 const HOLD_TIME_REQUIRED = 0.8; // 長押しに必要な時間（0.8秒）
+const RING_SHOW_DELAY = 0.15; // リング表示を開始する経過時間（0.15秒）
 
 // ========================================
 // ハイスコア管理 (localStorage)
@@ -1463,20 +1464,20 @@ function drawHowtoFormula(ctx, cy, slots) {
     });
 }
 
-// 長押し補充時のプログレスリング描画
+// 【変更】長押し補充時のプログレスリング描画（拡大・少し遅れて描画開始）
 function drawReloadProgress(cx, cy, progress) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.beginPath(); ctx.arc(cx, cy, 32, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI*2); ctx.fill();
 
     ctx.strokeStyle = '#f6ecd9';
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 10;
     ctx.beginPath();
-    ctx.arc(cx, cy, 26, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * progress);
+    ctx.arc(cx, cy, 31, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * progress);
     ctx.stroke();
 
     ctx.fillStyle = '#f6ecd9';
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = 'bold 13px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('補充中', cx, cy);
     ctx.restore();
@@ -1843,8 +1844,8 @@ function draw() {
         // 在庫数・売切帯表示を描画
         drawStockOverlay(px, py, 130, 75, k);
 
-        // 長押し補充プログレスリングを描画（中央やや上寄り）
-        if (reloadingItem === k) {
+        // 【変更】長押し補充プログレスリングを描画（指定時間経過後に表示）
+        if (reloadingItem === k && holdTimer >= RING_SHOW_DELAY) {
             drawReloadProgress(px + 65, py + 30, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
         }
     });
