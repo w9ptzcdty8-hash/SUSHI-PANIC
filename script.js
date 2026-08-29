@@ -1,33 +1,32 @@
 // ========================================
 // 寿司パニック - MRS GAMES
 // HTML5 Canvas / モバイル対応
-//
-// UI（タイトル・ポーズ・ゲームオーバー・作り方画面）は
-// 全てCanvas描画で構成しています（DOMオーバーレイは使用しません）。
 // ========================================
 
-
-// ========================================
-// 1. 基本設定
-// ========================================
-
-// ゲームの論理解像度（縦長 480x854）。
-// 描画コードは常にこの座標系で書けばよく、
-// 実際の表示サイズは resizeCanvas() が自動で合わせる。
 const GAME_WIDTH = 480;
 const GAME_HEIGHT = 854;
 
 const STATE = {
     TITLE: "title",
     HOWTO: "howto",
+    HIGHSCORE: "highscore",
     PLAYING: "playing",
     PAUSED: "paused",
     GAMEOVER: "gameover",
 };
 
+// ========================================
+// バランス調整用パラメータ（調整しやすいようにまとめて定義）
+// ========================================
+const RATING_CONFIG = {
+    SUCCESS_EACH: 0.01,  // 提供成功（途中皿）時の評判増加量
+    SUCCESS_FULL: 0.3,   // 満足退店（規定皿達成）時の評判増加量
+    MISS_SERVE: -0.5,    // 誤提供（間違えた寿司）時の評判減少量
+    MISS_TIMEOUT: -0.8,  // タイムアウト（見逃し）時の評判減少量
+};
 
 // ========================================
-// 2. DOM参照
+// DOM参照
 // ========================================
 
 const playArea = document.getElementById("play-area");
@@ -36,15 +35,13 @@ const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 const loadingEl = document.getElementById("loading");
 
-
 // ========================================
-// 3. レスポンシブCanvas（縦長固定比率でフィット）
+// レスポンシブCanvas
 // ========================================
 
 function resizeCanvas() {
     const rect = playArea.getBoundingClientRect();
 
-    // 利用可能領域に収まる最大の縦長ボックスを計算
     let width = rect.width;
     let height = width / (GAME_WIDTH / GAME_HEIGHT);
 
@@ -56,9 +53,6 @@ function resizeCanvas() {
     stage.style.width = `${width}px`;
     stage.style.height = `${height}px`;
 
-    // Canvasの内部解像度はdevicePixelRatioを考慮して高精細に。
-    // 描画座標系は常に GAME_WIDTH x GAME_HEIGHT のまま使えるよう、
-    // setTransformでdprぶんスケールしておく。
     const dpr = window.devicePixelRatio || 1;
     canvas.width = GAME_WIDTH * dpr;
     canvas.height = GAME_HEIGHT * dpr;
@@ -70,33 +64,8 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 window.addEventListener("orientationchange", resizeCanvas);
 
-
 // ========================================
-// 4. 汎用当たり判定
-//    このゲームでは矩形の当たり判定は使用していませんが、
-//    MRS GAMESテンプレート共通の基盤として用意しています。
-//    新しい判定が必要になった場合はここに追加してください。
-// ========================================
-
-/**
- * 矩形同士の衝突判定（AABB）。
- * @param {{x:number,y:number,width:number,height:number}} rectA
- * @param {{x:number,y:number,width:number,height:number}} rectB
- * @param {number} padding 判定を甘く/厳しくするための内側マージン
- * @returns {boolean}
- */
-function checkCollision(rectA, rectB, padding = 0) {
-    return (
-        rectA.x + padding < rectB.x + rectB.width - padding &&
-        rectA.x + rectA.width - padding > rectB.x + padding &&
-        rectA.y + padding < rectB.y + rectB.height - padding &&
-        rectA.y + rectA.height - padding > rectB.y + padding
-    );
-}
-
-
-// ========================================
-// 5. Canvasプリレンダリング（ネタ・調度品などのアセット生成）
+// Canvasプリレンダリング
 // ========================================
 
 const assets = {};
@@ -109,7 +78,6 @@ function createAsset(key, w, h, renderFunc) {
     assets[key] = c;
 }
 
-// 1. カウンター背景（檜のカウンター板)
 function renderTable(cCtx, w, h) {
     const grad = cCtx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, '#c9a06a');
@@ -127,7 +95,6 @@ function renderTable(cCtx, w, h) {
         cCtx.bezierCurveTo(x + 8, h*0.3, x - 8, h*0.65, x + (Math.random()-0.5)*10, h);
         cCtx.stroke();
     }
-    // 板の継ぎ目
     cCtx.strokeStyle = 'rgba(80, 50, 24, 0.35)';
     cCtx.lineWidth = 3;
     [0.4, 0.78].forEach(f => {
@@ -136,7 +103,6 @@ function renderTable(cCtx, w, h) {
         cCtx.lineTo(w, h*f + (Math.random()-0.5)*4);
         cCtx.stroke();
     });
-    // 上部の陰影で奥行きを出す
     const vign = cCtx.createLinearGradient(0, 0, 0, 150);
     vign.addColorStop(0, 'rgba(25,16,8,0.4)');
     vign.addColorStop(1, 'rgba(25,16,8,0)');
@@ -144,7 +110,6 @@ function renderTable(cCtx, w, h) {
     cCtx.fillRect(0, 0, w, 150);
 }
 
-// 1b. 暖簾（藍色・カウンター上部に掛かる看板）
 function renderNoren(cCtx, w, h) {
     cCtx.fillStyle = '#33210f';
     cCtx.fillRect(0, 0, w, 9);
@@ -180,7 +145,6 @@ function renderNoren(cCtx, w, h) {
     cCtx.textBaseline = 'alphabetic';
 }
 
-// 1c. 提灯（タイトル画面の演出用）
 function renderChochin(cCtx, w, h) {
     cCtx.strokeStyle = '#3a2415'; cCtx.lineWidth = 3;
     cCtx.beginPath(); cCtx.moveTo(w/2, 0); cCtx.lineTo(w/2, 14); cCtx.stroke();
@@ -217,7 +181,6 @@ function renderChochin(cCtx, w, h) {
     cCtx.beginPath(); cCtx.arc(w/2, h-2, 3, 0, Math.PI*2); cCtx.fill();
 }
 
-// 2. 飯台 (シャリ桶)
 function renderHangiri(cCtx, w, h) {
     cCtx.shadowColor = 'rgba(0,0,0,0.3)';
     cCtx.shadowBlur = 12;
@@ -266,7 +229,6 @@ function renderHangiri(cCtx, w, h) {
     cCtx.beginPath(); cCtx.ellipse(w/2, h/2+32, w/2-10, h/2-30, 0, 0, Math.PI); cCtx.stroke();
 }
 
-// 3. まな板
 function renderManaita(cCtx, w, h) {
     cCtx.shadowColor = 'rgba(0,0,0,0.4)';
     cCtx.shadowBlur = 10;
@@ -285,7 +247,6 @@ function renderManaita(cCtx, w, h) {
     }
 }
 
-// 4. 小皿 (漆器ベース)
 function drawPlateBase(cCtx, w, h) {
     cCtx.shadowColor = 'rgba(0,0,0,0.35)';
     cCtx.shadowBlur = 8;
@@ -294,7 +255,6 @@ function drawPlateBase(cCtx, w, h) {
     cCtx.beginPath(); cCtx.arc(w/2, h/2, w/2-10, 0, Math.PI*2); cCtx.fill();
     cCtx.shadowColor = 'transparent';
 
-    // 漆の照り
     cCtx.fillStyle = 'rgba(255,255,255,0.07)';
     cCtx.beginPath(); cCtx.ellipse(w/2-9, h/2-13, w/2-24, 9, -0.3, 0, Math.PI*2); cCtx.fill();
 
@@ -304,7 +264,6 @@ function drawPlateBase(cCtx, w, h) {
     cCtx.beginPath(); cCtx.arc(w/2, h/2, w/2-18, 0, Math.PI*2); cCtx.stroke();
 }
 
-// わさび皿
 function renderWasabiPlate(cCtx, w, h) {
     drawPlateBase(cCtx, w, h);
     cCtx.fillStyle = '#89c938';
@@ -323,7 +282,6 @@ function renderWasabiPlate(cCtx, w, h) {
     }
 }
 
-// のり皿
 function renderNoriPlate(cCtx, w, h) {
     drawPlateBase(cCtx, w, h);
     cCtx.shadowColor = 'rgba(0,0,0,0.4)'; cCtx.shadowBlur = 4;
@@ -338,7 +296,6 @@ function renderNoriPlate(cCtx, w, h) {
     cCtx.shadowColor = 'transparent';
 }
 
-// 5. 柳刃包丁
 function renderKnife(cCtx, w, h) {
     cCtx.shadowColor = 'rgba(0,0,0,0.5)'; cCtx.shadowBlur = 8; cCtx.shadowOffsetY = 4;
     cCtx.fillStyle = '#3a1f14'; cCtx.beginPath(); cCtx.roundRect(5, h/2-8, 65, 16, 3); cCtx.fill();
@@ -354,8 +311,6 @@ function renderKnife(cCtx, w, h) {
     cCtx.shadowColor = 'transparent';
 }
 
-// 6. 各種ネタイラスト描画
-// 柵切りシルエット（毎回わずかに歪ませて手切り感を出す）
 function sashimiSlicePath(w, h) {
     const j = () => (Math.random()-0.5)*3;
     const p = new Path2D();
@@ -427,7 +382,6 @@ function renderSalmon(cCtx, w, h) {
 }
 
 function renderEbi(cCtx, w, h) {
-    // 尾びれ
     cCtx.fillStyle = '#d1230a';
     cCtx.beginPath();
     cCtx.moveTo(w-42, 44); cCtx.lineTo(w-2, 16); cCtx.lineTo(w-10, 46); cCtx.lineTo(w+2, 62); cCtx.lineTo(w-42, 56);
@@ -435,7 +389,6 @@ function renderEbi(cCtx, w, h) {
     cCtx.strokeStyle = 'rgba(255,255,255,0.4)'; cCtx.lineWidth = 1;
     cCtx.beginPath(); cCtx.moveTo(w-38, 46); cCtx.lineTo(w-6, 24); cCtx.stroke();
 
-    // 身
     const grad = cCtx.createLinearGradient(0, 0, w, h);
     grad.addColorStop(0, '#ffd9ad'); grad.addColorStop(0.45, '#ff8a3d');
     grad.addColorStop(0.8, '#e94f10'); grad.addColorStop(1, '#c22900');
@@ -446,12 +399,10 @@ function renderEbi(cCtx, w, h) {
     cCtx.quadraticCurveTo(w*0.55, 76, 14, 66);
     cCtx.closePath(); cCtx.fill();
 
-    // 節（背側の分節ライン）
     cCtx.strokeStyle = 'rgba(200,40,10,0.55)'; cCtx.lineWidth = 2.5;
     for (let i = 18; i < w-46; i += 15) {
         cCtx.beginPath(); cCtx.moveTo(i, 18); cCtx.quadraticCurveTo(i+9, 44, i, 68); cCtx.stroke();
     }
-    // 腹側のツヤ
     cCtx.fillStyle = 'rgba(255,255,255,0.55)';
     cCtx.beginPath(); cCtx.ellipse(w*0.42, h*0.32, w*0.34, h*0.1, -0.15, 0, Math.PI*2); cCtx.fill();
     cCtx.strokeStyle = 'rgba(255,255,255,0.6)'; cCtx.lineWidth = 1.2;
@@ -474,7 +425,6 @@ function renderTamago(cCtx, w, h) {
     cCtx.strokeStyle = 'rgba(180,120,0,0.3)'; cCtx.lineWidth = 1.5;
     [30, 38, 46].forEach(y => { cCtx.beginPath(); cCtx.moveTo(16, y); cCtx.lineTo(w-16, y); cCtx.stroke(); });
 
-    // 焼き色（キャラメリゼした端。暖色のみで海苔と紛らわしくならないように）
     cCtx.fillStyle = 'rgba(196,122,20,0.4)';
     cCtx.beginPath(); cCtx.roundRect(14, 50, w-28, 10, {bottomLeft:5, bottomRight:5}); cCtx.fill();
 
@@ -489,7 +439,6 @@ function renderIka(cCtx, w, h) {
     grad.addColorStop(0, '#ffffff'); grad.addColorStop(0.5, '#f3f0ea'); grad.addColorStop(1, '#e4ddd0');
     cCtx.fillStyle = grad; cCtx.fillRect(0, 0, w, h);
 
-    // 化粧切り（格子状の飾り包丁）
     cCtx.strokeStyle = 'rgba(160,150,130,0.5)'; cCtx.lineWidth = 1;
     for (let i = -h; i < w; i += 9) {
         cCtx.beginPath(); cCtx.moveTo(i, 0); cCtx.lineTo(i+h, h); cCtx.stroke();
@@ -515,7 +464,6 @@ function renderBuri(cCtx, w, h) {
     grad.addColorStop(0, '#fff3ee'); grad.addColorStop(0.6, '#ffe3d8'); grad.addColorStop(1, '#f6c9b8');
     cCtx.fillStyle = grad; cCtx.fillRect(0, 0, w, h);
 
-    // 皮目の帯
     cCtx.fillStyle = 'rgba(170,190,195,0.55)';
     cCtx.beginPath(); cCtx.moveTo(6, 26); cCtx.quadraticCurveTo(w*0.4, 2, w-8, 34); cCtx.lineTo(w-8, 42); cCtx.quadraticCurveTo(w*0.4, 12, 6, 36); cCtx.fill();
 
@@ -560,7 +508,6 @@ function renderAnago(cCtx, w, h) {
     cCtx.stroke(path);
 }
 
-// いくらの粒を隙間なく敷き詰める共通ロジック
 function renderIkuraCluster(cCtx, cx, cy, rx, ry, spacing) {
     const balls = [];
     let row = 0;
@@ -592,13 +539,10 @@ function renderIkuraCluster(cCtx, cx, cy, rx, ry, spacing) {
         cCtx.fillStyle = grad;
         cCtx.beginPath(); cCtx.arc(b.x, b.y, b.r, 0, Math.PI*2); cCtx.fill();
         cCtx.strokeStyle = 'rgba(90,8,4,0.35)'; cCtx.lineWidth = 0.6; cCtx.stroke();
-        // 黄身の芯
         cCtx.fillStyle = 'rgba(255,255,255,0.5)';
         cCtx.beginPath(); cCtx.arc(b.x+b.r*0.12, b.y+b.r*0.2, b.r*0.22, 0, Math.PI*2); cCtx.fill();
-        // 照りのハイライト
         cCtx.fillStyle = 'rgba(255,255,255,0.9)';
         cCtx.beginPath(); cCtx.arc(b.x-b.r*0.38, b.y-b.r*0.42, b.r*0.24, 0, Math.PI*2); cCtx.fill();
-        // 粒の丸みを見せる縁の弧
         cCtx.strokeStyle = 'rgba(255,255,255,0.3)'; cCtx.lineWidth = b.r*0.16;
         cCtx.beginPath(); cCtx.arc(b.x, b.y, b.r*0.86, Math.PI*1.1, Math.PI*1.7); cCtx.stroke();
     });
@@ -614,7 +558,6 @@ function renderIkura(cCtx, w, h) {
     cCtx.restore();
 }
 
-// ウニのひだを隙間なく敷き詰める共通ロジック
 function renderUniCluster(cCtx, cx, cy, rx, ry, spacing) {
     const pieces = [];
     let row = 0;
@@ -649,7 +592,6 @@ function renderUniCluster(cCtx, cx, cy, rx, ry, spacing) {
         path.quadraticCurveTo(-10, -8, -2, -6);
         path.quadraticCurveTo(4, -9, 9, -3);
         path.quadraticCurveTo(13, 2, 8, 6);
-        path.quadraticCurveTo(2, 9, -4, 6);
         path.quadraticCurveTo(-10, 7, -14, 0);
         path.closePath();
         const pal = palettes[Math.floor(Math.random()*palettes.length)];
@@ -709,8 +651,6 @@ function renderServingBowlBase(cCtx, w, h) {
     cCtx.beginPath(); cCtx.ellipse(cx, rimY, rimRX-4, rimRY-2, 0, 0, Math.PI*2); cCtx.fill();
 }
 
-// いくら小鉢（寿司にする前のパレット表示用）
-// いくら小鉢（寿司にする前のパレット表示用）
 function renderIkuraBowl(cCtx, w, h) {
     renderServingBowlBase(cCtx, w, h);
     const cx = w/2, rimY = h*0.46, rimRX = w*0.4;
@@ -720,7 +660,6 @@ function renderIkuraBowl(cCtx, w, h) {
     cCtx.restore();
 }
 
-// ウニ小鉢（寿司にする前のパレット表示用）
 function renderUniBowl(cCtx, w, h) {
     renderServingBowlBase(cCtx, w, h);
     const cx = w/2, rimY = h*0.46, rimRX = w*0.4;
@@ -739,7 +678,7 @@ function renderShari(cCtx, w, h) {
     }
 }
 
-// ネタのデータ一覧（すじこからウニに変更）
+// ネタデータ
 const TOPPINGS = {
     maguro: { name: 'マグロ', category: 'nigiri', price: 500 },
     salmon: { name: 'サーモン', category: 'nigiri', price: 600 },
@@ -751,11 +690,6 @@ const TOPPINGS = {
     anago:  { name: 'アナゴ', category: 'tamago', price: 750 },
     ika:    { name: 'イカ',    category: 'nigiri', price: 400 }
 };
-
-
-// ========================================
-// 10. アセット一括生成
-// ========================================
 
 function initAssets() {
     createAsset('bg', GAME_WIDTH, GAME_HEIGHT, renderTable);
@@ -794,8 +728,37 @@ let cuttingBoard = [];
 let elapsedTime = 0;
 
 // ========================================
-// 6. SoundFX（Web Audio APIによる合成音声）
-//    外部音声ファイルなし。全て波形合成。
+// ハイスコア管理 (localStorage)
+// ========================================
+
+const HIGHSCORE_KEY = "sushi_panic_highscores";
+
+function getHighScores() {
+    try {
+        const data = localStorage.getItem(HIGHSCORE_KEY);
+        return data ? JSON.parse(data) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveHighScore(newScore) {
+    if (newScore <= 0) return;
+    const scores = getHighScores();
+    const now = new Date();
+    const dateStr = `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    scores.push({ score: newScore, date: dateStr });
+    scores.sort((a, b) => b.score - a.score);
+    const top5 = scores.slice(0, 5);
+    
+    try {
+        localStorage.setItem(HIGHSCORE_KEY, JSON.stringify(top5));
+    } catch (e) {}
+}
+
+// ========================================
+// SoundFX
 // ========================================
 
 class SoundFX {
@@ -803,7 +766,6 @@ class SoundFX {
         this.ctx = null;
     }
 
-    // 初回のユーザー操作時に呼び出してAudioContextを生成/再開する
     unlock() {
         this._ensureContext();
         if (this.ctx.state === "suspended") {
@@ -820,7 +782,7 @@ class SoundFX {
     }
 
     _tone({ freq = 440, freqEnd = null, duration = 0.12, type = "sine", gain = 0.2, delay = 0 }) {
-        if (!this.ctx) return; // unlock()前は何もしない
+        if (!this.ctx) return;
         const ctx = this.ctx;
         const t0 = ctx.currentTime + delay;
 
@@ -841,23 +803,25 @@ class SoundFX {
         osc.stop(t0 + duration + 0.02);
     }
 
-    // タップ操作音
     playTap() {
         this._tone({ freq: 600, freqEnd: 900, duration: 0.05, type: "sine", gain: 0.06 });
     }
 
-    // 提供成功音（上昇2音）
     playSuccess() {
         this._tone({ freq: 523.25, duration: 0.1, type: "triangle", gain: 0.12 });
         this._tone({ freq: 659.25, duration: 0.22, type: "triangle", gain: 0.12, delay: 0.08 });
     }
 
-    // 提供ミス・お客さんが帰ってしまった時の音
+    playVipSuccess() {
+        this._tone({ freq: 523.25, duration: 0.12, type: "triangle", gain: 0.15 });
+        this._tone({ freq: 659.25, duration: 0.12, type: "triangle", gain: 0.15, delay: 0.08 });
+        this._tone({ freq: 783.99, duration: 0.25, type: "triangle", gain: 0.18, delay: 0.16 });
+    }
+
     playError() {
         this._tone({ freq: 160, freqEnd: 100, duration: 0.2, type: "sawtooth", gain: 0.08 });
     }
 
-    // まな板リセット音
     playTrash() {
         this._tone({ freq: 180, duration: 0.08, type: "square", gain: 0.06 });
     }
@@ -866,9 +830,7 @@ class SoundFX {
 const sfx = new SoundFX();
 
 // ========================================
-// 7. 画面遷移
-//    タイトル/ポーズ/ゲームオーバー/作り方の各画面は
-//    すべてdraw()内でstateに応じてCanvasに描画する。
+// 画面遷移
 // ========================================
 
 function goToTitle() {
@@ -877,6 +839,10 @@ function goToTitle() {
 
 function goToHowto() {
     state = STATE.HOWTO;
+}
+
+function goToHighscore() {
+    state = STATE.HIGHSCORE;
 }
 
 function startGame() {
@@ -898,34 +864,30 @@ function resumeGame() {
 }
 
 function endGame() {
+    saveHighScore(score);
     state = STATE.GAMEOVER;
 }
 
 // ========================================
-// 8. 誤操作防止（ブラウザバック対策）
-//    プレイ中に戻るボタンでページ離脱しないようにする。
+// 誤操作防止（ブラウザバック対策）
 // ========================================
 
 function initBackButtonGuard() {
     history.pushState({ mrsGame: true }, "");
 
     window.addEventListener("popstate", () => {
-        // 戻る操作を検知するたびにstateを積み直し、ページ離脱を防ぐ
         history.pushState({ mrsGame: true }, "");
 
         if (state === STATE.PLAYING) {
             pauseGame();
-        } else if (state === STATE.GAMEOVER || state === STATE.HOWTO) {
+        } else if (state === STATE.GAMEOVER || state === STATE.HOWTO || state === STATE.HIGHSCORE) {
             goToTitle();
         }
-        // ポーズ中・タイトル中はそのまま何もしない
     });
 }
 
 // ========================================
-// 9. 操作入力
-//    カウンターの客・ネタパレット・調理場・各画面のボタンは
-//    すべてCanvas上の座標判定で処理する。
+// 操作入力
 // ========================================
 
 const customerSlotX = (i) => 10 + i * 92 + 46;
@@ -938,21 +900,26 @@ function handleTouch(x, y) {
     const vy = (y - rect.top) * scaleY;
 
     if (state === STATE.TITLE) {
-        if (vx >= 90 && vx <= 390 && vy >= 700 && vy <= 772) { startGame(); sfx.playTap(); }
-        else if (vx >= 140 && vx <= 340 && vy >= 786 && vy <= 836) { goToHowto(); sfx.playTap(); }
+        if (vx >= 90 && vx <= 390 && vy >= 630 && vy <= 702) { startGame(); sfx.playTap(); }
+        else if (vx >= 90 && vx <= 230 && vy >= 716 && vy <= 766) { goToHowto(); sfx.playTap(); }
+        else if (vx >= 250 && vx <= 390 && vy >= 716 && vy <= 766) { goToHighscore(); sfx.playTap(); }
+        else if (vx >= 140 && vx <= 340 && vy >= 780 && vy <= 830) {
+            window.location.href = 'https://mrs-games.pages.dev';
+            sfx.playTap();
+        }
     } else if (state === STATE.HOWTO) {
         goToTitle(); sfx.playTap();
+    } else if (state === STATE.HIGHSCORE) {
+        goToTitle(); sfx.playTap();
     } else if (state === STATE.PAUSED) {
-        if (vy > 350 && vy < 410 && vx > 100 && vx < 380) { resumeGame(); sfx.playTap(); }
-        else if (vy > 430 && vy < 490 && vx > 100 && vx < 380) { startGame(); sfx.playTap(); }
-        else if (vy > 510 && vy < 570 && vx > 100 && vx < 380) { goToTitle(); sfx.playTap(); }
+        if (vy >= 350 && vy <= 410 && vx >= 100 && vx <= 380) { resumeGame(); sfx.playTap(); }
+        else if (vy >= 430 && vy <= 490 && vx >= 100 && vx <= 380) { startGame(); sfx.playTap(); }
+        else if (vy >= 510 && vy <= 570 && vx >= 100 && vx <= 380) { goToTitle(); sfx.playTap(); }
     } else if (state === STATE.GAMEOVER) {
-        if (vy > 550 && vy < 630 && vx > 100 && vx < 380) { goToTitle(); sfx.playTap(); }
+        if (vy >= 560 && vy <= 622 && vx >= 100 && vx <= 380) { goToTitle(); sfx.playTap(); }
     } else if (state === STATE.PLAYING) {
-        // Pause
-        if (vx > 410 && vx < 468 && vy > 10 && vy < 55) { pauseGame(); sfx.playTap(); return; }
+        if (vx >= 410 && vx <= 468 && vy >= 10 && vy <= 55) { pauseGame(); sfx.playTap(); return; }
 
-        // カウンターの客（タップしたお客さんに提供・判定）
         if (vy >= 95 && vy <= 255) {
             for (let i = 0; i < CUSTOMER_SLOTS; i++) {
                 const cx = customerSlotX(i);
@@ -964,10 +931,11 @@ function handleTouch(x, y) {
             }
         }
 
-        // まな板の上の寿司をタップしてリセット
-        if (vx > 255 && vx < 385 && vy > 560 && vy < 670) { if (cuttingBoard.length > 0) { cuttingBoard = []; sfx.playTrash(); } return; }
+        if (vx >= 180 && vx <= 460 && vy >= 535 && vy <= 735) {
+            if (cuttingBoard.length > 0) { cuttingBoard = []; sfx.playTrash(); }
+            return;
+        }
 
-        // ネタパレット (3列x3行)
         const gridX = [20, 170, 320]; const gridY = [265, 350, 435];
         const keys = ['maguro', 'salmon', 'ikura', 'tamago', 'ebi', 'buri', 'uni', 'anago', 'ika'];
         for (let i = 0; i < 9; i++) {
@@ -975,13 +943,9 @@ function handleTouch(x, y) {
             if (vx >= gridX[col] && vx <= gridX[col]+130 && vy >= gridY[row] && vy <= gridY[row]+75) { addIngredient(keys[i]); return; }
         }
 
-        // 下部調理場
-        // わさび皿 (X: 15~90, Y: 520~600)
-        if (vx >= 15 && vx <= 90 && vy >= 520 && vy <= 600) addIngredient('wasabi');
-        // のり皿 (X: 95~170, Y: 520~600)
-        else if (vx >= 95 && vx <= 170 && vy >= 520 && vy <= 600) addIngredient('nori');
-        // シャリ桶 (X: 15~170, Y: 610~830)
-        else if (vx >= 15 && vx <= 170 && vy >= 610 && vy <= 830) addIngredient('rice');
+        if (vx >= 15 && vx <= 95 && vy >= 520 && vy <= 600) addIngredient('wasabi');
+        else if (vx >= 95 && vx <= 175 && vy >= 520 && vy <= 600) addIngredient('nori');
+        else if (vx >= 5 && vx <= 185 && vy >= 605 && vy <= 785) addIngredient('rice');
     }
 }
 
@@ -990,8 +954,6 @@ function addIngredient(item) {
     if (cuttingBoard.length < 4) { cuttingBoard.push(item); sfx.playTap(); }
 }
 
-// タップ/クリックはstage要素にスコープし、window全体では拾わない
-// （広告枠など無関係な領域での誤発火を防ぐ）
 function initInputHandlers() {
     stage.addEventListener("pointerdown", (e) => {
         sfx.unlock();
@@ -1000,18 +962,24 @@ function initInputHandlers() {
     }, { passive: false });
 }
 
-// --- 難易度（スコアに応じてお客さんの人数・スピードが上がる） ---
-const SCORE_THRESHOLDS = [0, 900, 2200, 4200, 6800];
+// --- 難易度設定 ---
+const SCORE_THRESHOLDS = [0, 1500, 4500, 10000, 20000];
 let unlockedSlots = 1;
 
 function getDifficultyLevel() {
     let lvl = 0;
-    for (let i = 1; i < SCORE_THRESHOLDS.length; i++) { if (score >= SCORE_THRESHOLDS[i]) lvl = i; }
+    for (let i = 1; i < SCORE_THRESHOLDS.length; i++) {
+        if (score >= SCORE_THRESHOLDS[i]) lvl = i;
+    }
     return lvl;
 }
-function getActiveSlotCount() { return Math.min(CUSTOMER_SLOTS, getDifficultyLevel() + 1); }
+
+function getActiveSlotCount() {
+    return Math.min(CUSTOMER_SLOTS, getDifficultyLevel() + 1);
+}
+
 function getPatienceRate() { return 2.8 * (1 + getDifficultyLevel() * 0.16); }
-function getRevealDuration() { return Math.max(1.6, 3.2 - getDifficultyLevel() * 0.3); }
+function getRevealDuration() { return Math.max(3.5, 6.0 - getDifficultyLevel() * 0.4); }
 function getRespawnDelay(base) { return Math.max(base * 0.4, base - getDifficultyLevel() * 60); }
 
 function unlockNewSeatsIfNeeded() {
@@ -1027,15 +995,33 @@ function spawnCustomer(slot) {
     const keys = Object.keys(TOPPINGS);
     const rKey = keys[Math.floor(Math.random() * keys.length)];
     const isSabiNuki = (TOPPINGS[rKey].category === 'nigiri') ? (Math.random() < 0.3) : false;
+    const isVip = Math.random() < 0.20;
+    const speedFactor = 0.7 + Math.random() * 0.8;
+
+    // 【新規】満足退店までの必要皿数を設定（通常客: 3〜5皿, VIP: 5〜8皿）
+    const targetEatenCount = isVip
+        ? Math.floor(Math.random() * 4) + 5  // 5〜8皿
+        : Math.floor(Math.random() * 3) + 3; // 3〜5皿
+
     customers.push({
-        slot, key: rKey, category: TOPPINGS[rKey].category, price: TOPPINGS[rKey].price, name: TOPPINGS[rKey].name,
-        isSabiNuki: isSabiNuki, patience: 100, maxPatience: 100,
-        revealTimer: getRevealDuration(), revealDuration: getRevealDuration()
+        slot,
+        key: rKey,
+        category: TOPPINGS[rKey].category,
+        price: TOPPINGS[rKey].price * (isVip ? 3 : 1),
+        name: TOPPINGS[rKey].name,
+        isSabiNuki: isSabiNuki,
+        isVip: isVip,
+        eatenCount: 0,
+        targetEatenCount: targetEatenCount, // 満足退店する必要皿数
+        patience: 100,
+        maxPatience: 100,
+        patienceSpeedFactor: speedFactor,
+        revealTimer: getRevealDuration(),
+        revealDuration: getRevealDuration(),
+        eatingTimer: 0
     });
 }
 
-
-// まな板の中身が完成した寿司になっているか判定（客とは照合しない）
 function getPreparedSushi() {
     const cb = cuttingBoard;
     if (cb.length < 2) return null;
@@ -1058,10 +1044,10 @@ function getPreparedSushi() {
     return { key: toppingItem, category: cat, hasWasabi: cb.includes('wasabi') };
 }
 
-// タップされた客に、まな板の寿司を提供して判定
 function serveCustomer(idx) {
     const c = customers[idx];
-    if (!c) return;
+    if (!c || c.eatingTimer > 0) return;
+
     const sushi = getPreparedSushi();
     if (!sushi) { sfx.playTap(); return; }
 
@@ -1073,15 +1059,33 @@ function serveCustomer(idx) {
     }
 
     if (isMatch) {
-        score += c.price; servedCount++; rating = Math.min(MAX_RATING, rating + 0.35);
-        const slot = c.slot;
-        customers.splice(idx, 1);
+        score += c.price;
+        servedCount++;
+        c.eatenCount++;
+        
+        if (c.isVip) sfx.playVipSuccess();
+        else sfx.playSuccess();
+
         cuttingBoard = [];
-        sfx.playSuccess();
+
         unlockNewSeatsIfNeeded();
-        setTimeout(() => spawnCustomer(slot), getRespawnDelay(350));
+
+        // 規定皿（通常: 3~5皿, VIP: 5~8皿）に達したら満足して退店
+        if (c.eatenCount >= c.targetEatenCount) {
+            // 【評判設定】満足退店時の評判加算 (+0.3)
+            rating = Math.min(MAX_RATING, rating + RATING_CONFIG.SUCCESS_FULL);
+            const slot = c.slot;
+            customers.splice(idx, 1);
+            setTimeout(() => spawnCustomer(slot), getRespawnDelay(400));
+        } else {
+            // 【評判設定】提供成功（途中皿）時の評判加算 (+0.01)
+            rating = Math.min(MAX_RATING, rating + RATING_CONFIG.SUCCESS_EACH);
+            c.eatingTimer = 1.5 + Math.random() * 2.5;
+            c.patience = 100;
+        }
     } else {
-        rating = Math.max(0, rating - 0.5);
+        // 【評判設定】誤提供（間違えた寿司）時の評判減少 (-0.5)
+        rating = Math.max(0, rating + RATING_CONFIG.MISS_SERVE);
         cuttingBoard = [];
         sfx.playError();
         if (rating <= 0) endGame();
@@ -1090,21 +1094,48 @@ function serveCustomer(idx) {
 
 function update(dt) {
     if (state !== STATE.PLAYING) return;
-    const patienceRate = getPatienceRate();
+    const basePatienceRate = getPatienceRate();
+
     for (let i = customers.length - 1; i >= 0; i--) {
         const c = customers[i];
+
+        if (c.eatingTimer > 0) {
+            c.eatingTimer -= dt;
+            if (c.eatingTimer <= 0) {
+                c.eatingTimer = 0;
+                const keys = Object.keys(TOPPINGS);
+                const rKey = keys[Math.floor(Math.random() * keys.length)];
+                c.key = rKey;
+                c.category = TOPPINGS[rKey].category;
+                c.price = TOPPINGS[rKey].price * (c.isVip ? 3 : 1);
+                c.isSabiNuki = (TOPPINGS[rKey].category === 'nigiri') ? (Math.random() < 0.3) : false;
+                c.patience = 100;
+                c.revealTimer = getRevealDuration();
+            }
+            continue;
+        }
+
         if (c.revealTimer > 0) c.revealTimer = Math.max(0, c.revealTimer - dt);
-        c.patience -= dt * patienceRate;
+
+        c.patience -= dt * basePatienceRate * c.patienceSpeedFactor;
+
         if (c.patience <= 0) {
             const slot = c.slot;
-            rating -= 0.8; customers.splice(i, 1); sfx.playError();
-            if (rating <= 0) { endGame(); } else { setTimeout(() => spawnCustomer(slot), getRespawnDelay(600)); }
+            // 【評判設定】タイムアウト（見逃し）時の評判減少 (-0.8)
+            rating = Math.max(0, rating + RATING_CONFIG.MISS_TIMEOUT);
+            customers.splice(i, 1);
+            sfx.playError();
+
+            if (rating <= 0) {
+                endGame();
+            } else {
+                setTimeout(() => spawnCustomer(slot), getRespawnDelay(600));
+            }
         }
     }
 }
 
 // --- 描画関数 ---
-// 漆器ボタン風カード（操作ボタン用）
 function drawCard(ctx, x, y, w, h, bg) {
     ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
     ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(x, y, w, h, 14); ctx.fill();
@@ -1113,7 +1144,6 @@ function drawCard(ctx, x, y, w, h, bg) {
     ctx.beginPath(); ctx.roundRect(x+2, y+2, w-4, h-4, 12); ctx.stroke();
 }
 
-// 和紙風カード（情報表示・パレット用）
 function drawWashiCard(ctx, x, y, w, h, radius) {
     const r = radius || 13;
     ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
@@ -1148,7 +1178,6 @@ function drawCompleteSushi(ctx, x, y, key, isSabiNuki, scale) {
     ctx.restore();
 }
 
-// カウンターのお客さん（簡易な胸像イラスト）
 const CUSTOMER_STYLES = [
     { hair: '#3a2a1a', shirt: '#d9381e' },
     { hair: '#5a3820', shirt: '#1c3d5f' },
@@ -1156,25 +1185,48 @@ const CUSTOMER_STYLES = [
     { hair: '#7a4a25', shirt: '#c9973a' },
     { hair: '#2a2a2a', shirt: '#8a4fae' }
 ];
-function drawCustomerBust(ctx, cx, cy, styleIdx) {
-    const st = CUSTOMER_STYLES[styleIdx % CUSTOMER_STYLES.length];
-    ctx.fillStyle = st.shirt;
-    ctx.beginPath(); ctx.roundRect(cx-30, cy+8, 60, 42, {topLeft:18, topRight:18, bottomLeft:0, bottomRight:0}); ctx.fill();
-    ctx.fillStyle = '#f0c49a';
-    ctx.fillRect(cx-8, cy+2, 16, 14);
-    ctx.fillStyle = '#f7d3ab';
-    ctx.beginPath(); ctx.arc(cx, cy-8, 20, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = st.hair;
-    ctx.beginPath(); ctx.arc(cx, cy-14, 21, Math.PI, 0); ctx.fill();
-    ctx.fillRect(cx-21, cy-14, 6, 16);
-    ctx.fillRect(cx+15, cy-14, 6, 16);
-    ctx.fillStyle = '#2c2c2c';
-    ctx.beginPath(); ctx.arc(cx-7, cy-8, 2, 0, Math.PI*2); ctx.arc(cx+7, cy-8, 2, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = '#a35c3c'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(cx, cy-2, 5, 0.1*Math.PI, 0.9*Math.PI); ctx.stroke();
+
+function drawCustomerBust(ctx, cx, cy, styleIdx, isVip, isEating, isAngry) {
+    if (isVip) {
+        ctx.save();
+        ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 18;
+        ctx.fillStyle = '#e8ac10';
+        ctx.beginPath(); ctx.arc(cx, cy-8, 28, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = '#d4af37';
+        ctx.beginPath(); ctx.roundRect(cx-30, cy+8, 60, 42, {topLeft:18, topRight:18, bottomLeft:0, bottomRight:0}); ctx.fill();
+        ctx.fillStyle = '#f0c49a'; ctx.fillRect(cx-8, cy+2, 16, 14);
+        ctx.fillStyle = '#f7d3ab'; ctx.beginPath(); ctx.arc(cx, cy-8, 20, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(cx, cy-14, 21, Math.PI, 0); ctx.fill();
+        ctx.fillStyle = '#2c2c2c';
+        ctx.beginPath(); ctx.arc(cx-7, cy-8, 2, 0, Math.PI*2); ctx.arc(cx+7, cy-8, 2, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#a35c3c'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(cx, cy-2, 5, 0.1*Math.PI, 0.9*Math.PI); ctx.stroke();
+    } else {
+        const st = CUSTOMER_STYLES[styleIdx % CUSTOMER_STYLES.length];
+        ctx.fillStyle = st.shirt;
+        ctx.beginPath(); ctx.roundRect(cx-30, cy+8, 60, 42, {topLeft:18, topRight:18, bottomLeft:0, bottomRight:0}); ctx.fill();
+        ctx.fillStyle = '#f0c49a'; ctx.fillRect(cx-8, cy+2, 16, 14);
+        ctx.fillStyle = '#f7d3ab'; ctx.beginPath(); ctx.arc(cx, cy-8, 20, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = st.hair; ctx.beginPath(); ctx.arc(cx, cy-14, 21, Math.PI, 0); ctx.fill();
+        ctx.fillRect(cx-21, cy-14, 6, 16); ctx.fillRect(cx+15, cy-14, 6, 16);
+        ctx.fillStyle = '#2c2c2c'; ctx.beginPath(); ctx.arc(cx-7, cy-8, 2, 0, Math.PI*2); ctx.arc(cx+7, cy-8, 2, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#a35c3c'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(cx, cy-2, 5, 0.1*Math.PI, 0.9*Math.PI); ctx.stroke();
+    }
+
+    if (isEating) {
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.arc(cx, cy-35, 14, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#1c3d5f'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('🎵', cx, cy-31);
+    } else if (isAngry) {
+        ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('💢', cx + 18, cy - 25);
+    }
 }
 
-// 遊び方画面：材料アイコンを横に並べて「＋」「＝」でつなぐ
 function drawHowtoFormula(ctx, cy, slots) {
     const spacing = slots.length <= 5 ? 65 : 60;
     const start = 240 - (slots.length - 1) / 2 * spacing;
@@ -1208,34 +1260,43 @@ function draw() {
         dimGrad.addColorStop(1, 'rgba(20,14,8,0.82)');
         ctx.fillStyle = dimGrad; ctx.fillRect(0,0,GAME_WIDTH,GAME_HEIGHT);
 
-        // 提灯（ゆらゆら揺れる）
         ctx.save();
-        ctx.translate(GAME_WIDTH/2, 130);
+        ctx.translate(GAME_WIDTH/2, 110);
         ctx.rotate(Math.sin(elapsedTime*1.3)*0.05);
         ctx.drawImage(assets['chochin'], -55, 0);
         ctx.restore();
 
-        // 朱色の丸（日の丸バースト）+ ロゴ
         ctx.fillStyle = 'rgba(217,56,30,0.9)';
-        ctx.beginPath(); ctx.arc(GAME_WIDTH/2, 430, 110, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(GAME_WIDTH/2, 370, 105, 0, Math.PI*2); ctx.fill();
         ctx.strokeStyle = 'rgba(246,236,217,0.85)'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(GAME_WIDTH/2, 430, 120, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(GAME_WIDTH/2, 370, 115, 0, Math.PI*2); ctx.stroke();
 
         ctx.textAlign = 'center';
         ctx.fillStyle = '#f6ecd9';
-        ctx.font = 'bold 58px serif';
-        ctx.fillText('寿司パニック', GAME_WIDTH/2, 418);
+        ctx.font = 'bold 56px serif';
+        ctx.fillText('寿司パニック', GAME_WIDTH/2, 358);
         ctx.font = 'bold 15px sans-serif';
         ctx.fillStyle = 'rgba(246,236,217,0.85)';
-        ctx.fillText('立ち食い寿司の板前修業', GAME_WIDTH/2, 448);
+        ctx.fillText('立ち食い寿司の板前修業', GAME_WIDTH/2, 388);
 
-        drawCompleteSushi(ctx, GAME_WIDTH/2, 560, 'salmon', false, 1.3);
+        drawCompleteSushi(ctx, GAME_WIDTH/2, 500, 'salmon', false, 1.2);
 
-        drawCard(ctx, 90, 700, 300, 72, '#d9381e');
-        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 24px serif'; ctx.fillText('のれんをくぐる', GAME_WIDTH/2, 746);
+        // スタートボタン
+        drawCard(ctx, 90, 630, 300, 70, '#d9381e');
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 24px serif'; ctx.fillText('のれんをくぐる', GAME_WIDTH/2, 674);
 
-        drawWashiCard(ctx, 140, 786, 200, 50, 12);
-        ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 18px serif'; ctx.fillText('遊び方', GAME_WIDTH/2, 818);
+        // 遊び方ボタン
+        drawWashiCard(ctx, 90, 716, 140, 50, 12);
+        ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 17px serif'; ctx.fillText('遊び方', 160, 747);
+
+        // ハイスコアボタン
+        drawWashiCard(ctx, 250, 716, 140, 50, 12);
+        ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 17px serif'; ctx.fillText('ハイスコア', 320, 747);
+
+        // クレジット
+        ctx.fillStyle = 'rgba(246,236,217,0.85)';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Produced by MRS GAMES 🌐', GAME_WIDTH/2, 805);
 
         ctx.textAlign = 'left';
         return;
@@ -1245,12 +1306,10 @@ function draw() {
         ctx.fillStyle = '#f4eee6'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 26px serif';
-        ctx.fillText('作り方', GAME_WIDTH/2, 44);
-        ctx.fillStyle = 'rgba(28,61,95,0.6)'; ctx.font = '11px sans-serif';
-        ctx.fillText('画面をタップでタイトルへ戻る', GAME_WIDTH/2, 64);
+        ctx.fillText('作り方', GAME_WIDTH/2, 40);
 
         const rows = [
-            { top: 75, num: '①', title: 'にぎり', sub: 'マグロ・サーモン・エビ・ぶり・イカ',
+            { top: 65, num: '①', title: 'にぎり', sub: 'マグロ・サーモン・エビ・ぶり・イカ',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
@@ -1262,7 +1321,7 @@ function draw() {
               ],
               note: 'わさびを抜けば「サビ抜き」の注文にも対応できる'
             },
-            { top: 305, num: '②', title: '軍艦（ぐんかん）', sub: 'いくら・うに',
+            { top: 290, num: '②', title: '軍艦（ぐんかん）', sub: 'いくら・うに',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
@@ -1274,7 +1333,7 @@ function draw() {
               ],
               note: 'のりを先に巻いてから、ネタを盛りつける'
             },
-            { top: 535, num: '③', title: 'たまご・アナゴ', sub: 'たまご・アナゴ',
+            { top: 515, num: '③', title: 'たまご・アナゴ', sub: 'たまご・アナゴ',
               formula: [
                   { type: 'icon', key: 'shari', label: 'シャリ' },
                   { type: 'symbol', text: '＋' },
@@ -1300,6 +1359,52 @@ function draw() {
             ctx.fillText(r.note, GAME_WIDTH/2, r.top + 185);
         });
 
+        // 「タイトルへ戻る」ボタン
+        drawCard(ctx, 100, 755, 280, 60, '#1c3d5f');
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
+        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 793);
+
+        ctx.textAlign = 'left';
+        return;
+    }
+
+    if (state === STATE.HIGHSCORE) {
+        ctx.fillStyle = '#f4eee6'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 28px serif';
+        ctx.fillText('歴代ハイスコア', GAME_WIDTH/2, 60);
+
+        const scores = getHighScores();
+        if (scores.length === 0) {
+            ctx.fillStyle = '#1c3d5f'; ctx.font = '18px serif';
+            ctx.fillText('記録がありません', GAME_WIDTH/2, 350);
+        } else {
+            const startY = 110;
+            const rowH = 105;
+            const medals = ['🥇', '🥈', '🥉', '4位', '5位'];
+
+            scores.forEach((sc, i) => {
+                const y = startY + i * rowH;
+                drawWashiCard(ctx, 40, y, 400, 85, 14);
+
+                ctx.fillStyle = '#1c3d5f';
+                ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'left';
+                ctx.fillText(medals[i], 60, y + 50);
+
+                ctx.font = 'bold 26px serif'; ctx.textAlign = 'right';
+                ctx.fillStyle = '#d9381e';
+                ctx.fillText(`￥${sc.score.toLocaleString()}`, 410, y + 43);
+
+                ctx.font = '12px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.6)';
+                ctx.fillText(sc.date, 410, y + 68);
+            });
+        }
+
+        // 「タイトルへ戻る」ボタン
+        drawCard(ctx, 100, 745, 280, 60, '#1c3d5f');
+        ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
+        ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 783);
+
         ctx.textAlign = 'left';
         return;
     }
@@ -1311,7 +1416,7 @@ function draw() {
 
         ctx.textAlign = 'center';
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 42px serif'; ctx.fillText('本日の営業終了', GAME_WIDTH/2, 340);
-        ctx.fillStyle = '#e6c877'; ctx.font = 'bold 32px sans-serif'; ctx.fillText(`本日の売上 ￥${score}`, GAME_WIDTH/2, 400);
+        ctx.fillStyle = '#e6c877'; ctx.font = 'bold 32px sans-serif'; ctx.fillText(`本日の売上 ￥${score.toLocaleString()}`, GAME_WIDTH/2, 400);
 
         drawCard(ctx, 100, 560, 280, 62, '#1c3d5f');
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.fillText('また明日、タイトルへ', GAME_WIDTH/2, 599);
@@ -1319,10 +1424,10 @@ function draw() {
         return;
     }
 
-    // 上部の暖簾（店の顔）
+    // 上部の暖簾
     ctx.drawImage(assets['noren'], 0, 0);
 
-    // ヘッダーUI（和紙の勘定札）
+    // ヘッダーUI
     drawWashiCard(ctx, 10, 10, 150, 50);
     ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign='left';
     ctx.fillText(`💰￥${score}`, 20, 30); ctx.fillText(`⭐${rating.toFixed(1)}`, 20, 50);
@@ -1330,17 +1435,18 @@ function draw() {
     drawWashiCard(ctx, 410, 10, 58, 45);
     ctx.fillStyle = '#1c3d5f'; ctx.fillRect(430, 20, 6, 25); ctx.fillRect(442, 20, 6, 25);
 
-    // カウンター越しに並ぶお客さん（吹き出しは出た直後だけ・あとは記憶勝負）
+    // カウンターのお客さん
     for (let i = 0; i < CUSTOMER_SLOTS; i++) {
         const slotCx = customerSlotX(i);
         const c = customers.find(cc => cc.slot === i);
         if (!c) continue;
 
-        // 注文の吹き出し（出現直後だけ表示し、フェードして消える）
-        if (c.revealTimer > 0) {
+        const isAngry = c.patience <= 35 && c.eatingTimer <= 0;
+
+        if (c.eatingTimer <= 0 && (c.revealTimer > 0 || isAngry)) {
             const bw = 82, bh = 58, by = 95;
             const bx = slotCx - bw/2;
-            const alpha = c.revealTimer < 0.4 ? c.revealTimer/0.4 : 1;
+            const alpha = (c.revealTimer < 0.5 && !isAngry) ? c.revealTimer/0.5 : 1;
             ctx.globalAlpha = alpha;
             drawWashiCard(ctx, bx, by, bw, bh, 12);
             ctx.fillStyle = '#f6ecd9';
@@ -1354,18 +1460,27 @@ function draw() {
                 ctx.fillStyle = '#d9381e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
                 ctx.fillText('サビ抜き', slotCx, by+bh-6);
             }
+            if (c.isVip) {
+                ctx.fillStyle = '#b8860b'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('★VIP★', slotCx, by+10);
+            }
+            if (isAngry) {
+                ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('💢', bx + bw - 6, by + 14);
+            }
             ctx.globalAlpha = 1;
         }
 
-        drawCustomerBust(ctx, slotCx, 205, i);
+        drawCustomerBust(ctx, slotCx, 205, i, c.isVip, c.eatingTimer > 0, isAngry);
 
-        // 我慢メーター（吹き出しが消えた後も常に表示）
-        const tRatio = Math.max(0, c.patience / c.maxPatience);
-        const barW = 56;
-        drawWashiCard(ctx, slotCx-barW/2-4, 165, barW+8, 13, 6);
-        ctx.fillStyle = 'rgba(28,61,95,0.2)'; ctx.fillRect(slotCx-barW/2, 169, barW, 4);
-        ctx.fillStyle = tRatio > 0.3 ? '#3a7d44' : '#d9381e';
-        ctx.fillRect(slotCx-barW/2, 169, barW*tRatio, 4);
+        if (c.eatingTimer <= 0) {
+            const tRatio = Math.max(0, c.patience / c.maxPatience);
+            const barW = 56;
+            drawWashiCard(ctx, slotCx-barW/2-4, 165, barW+8, 13, 6);
+            ctx.fillStyle = 'rgba(28,61,95,0.2)'; ctx.fillRect(slotCx-barW/2, 169, barW, 4);
+            ctx.fillStyle = tRatio > 0.3 ? '#3a7d44' : '#d9381e';
+            ctx.fillRect(slotCx-barW/2, 169, barW*tRatio, 4);
+        }
     }
 
     // カウンターの縁
@@ -1402,12 +1517,11 @@ function draw() {
             ctx.fillStyle='#171c15'; ctx.fillRect(bx-10, by-40, 20, 55);
         }
 
-        // タップでリセットできるヒント
         ctx.fillStyle = 'rgba(28,61,95,0.5)'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText('タップでやり直し', bx, by+45);
     }
 
-    // PAUSE（一時休憩）
+    // PAUSE
     if (state === STATE.PAUSED) {
         ctx.fillStyle = 'rgba(20,14,8,0.72)'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 34px serif'; ctx.textAlign = 'center'; ctx.fillText('少々休憩', GAME_WIDTH/2, 280);
@@ -1419,11 +1533,7 @@ function draw() {
 }
 
 // ========================================
-// 11. 固定60FPSゲームループ
-//     requestAnimationFrameの間隔は端末依存（120Hz/144Hz等）だが、
-//     ロジック更新はアキュムレータ方式で常に60FPS相当に固定する。
-//     演出用のelapsedTime（提灯の揺れなど）は毎フレームの実時間で
-//     滑らかに進める。
+// 固定60FPSゲームループ
 // ========================================
 
 const STEP_MS = 1000 / 60;
@@ -1445,7 +1555,6 @@ function gameLoop(timestamp) {
 
     elapsedTime += frameDelta / 1000;
 
-    // タブ非アクティブからの復帰などで極端に大きいdeltaが来た場合に備えクランプ
     if (frameDelta > STEP_MS * MAX_STEPS_PER_FRAME) {
         frameDelta = STEP_MS * MAX_STEPS_PER_FRAME;
     }
@@ -1460,9 +1569,8 @@ function gameLoop(timestamp) {
     draw();
 }
 
-
 // ========================================
-// 12. 初期化
+// 初期化
 // ========================================
 
 function init() {
@@ -1470,7 +1578,6 @@ function init() {
     initInputHandlers();
     initBackButtonGuard();
 
-    // アセット生成（同期処理。量が多いため初回のみ少し時間がかかる）
     initAssets();
     loadingEl.style.display = "none";
 
