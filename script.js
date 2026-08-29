@@ -1704,15 +1704,16 @@ function draw() {
         } else {
             const startY = 110;
             const rowH = 105;
-            const medals = ['🥇', '🥈', '🥉', '4位', '5位'];
+            const medals = ['🥇', '🥈', '🥉', ' 4位', ' 5位'];
+            const medalSizes = [72, 40, 32, 26, 26]; // 各順位文字サイズ
 
             scores.forEach((sc, i) => {
                 const y = startY + i * rowH;
                 drawWashiCard(ctx, 40, y, 400, 85, 14);
-
-                ctx.fillStyle = '#1c3d5f';
-                // 順位
-                ctx.font = i >= 3 ? 'bold 32px sans-serif' : 'bold 72px sans-serif'; // メダル表示を72px、４，５位を32px
+                
+                // 順位表示
+                ctx.font = `bold ${medalSizes[i]}px sans-serif`; //順位文字サイズ・フォント
+                ctx.fillStyle = '#1c3d5f'; //順位文字色
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(medals[i], 50, y + 43);
