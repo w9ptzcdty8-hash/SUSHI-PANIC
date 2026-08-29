@@ -1579,9 +1579,22 @@ function draw() {
         drawWashiCard(ctx, 250, 716, 140, 50, 12);
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 17px serif'; ctx.fillText('ハイスコア', 320, 747);
 
+        // Canvas描画によるアンダーライン付き外部リンクテキスト
+        const linkText = 'Produced by MRS GAMES 🌐';
+        const linkX = GAME_WIDTH / 2;
+        const linkY = 805;
+
         ctx.fillStyle = 'rgba(246,236,217,0.85)';
         ctx.font = '13px sans-serif';
-        ctx.fillText('Produced by MRS GAMES 🌐', GAME_WIDTH/2, 805);
+        ctx.fillText(linkText, linkX, linkY);
+
+        const textWidth = ctx.measureText(linkText).width;
+        ctx.strokeStyle = 'rgba(246,236,217,0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(linkX - textWidth / 2, linkY + 4);
+        ctx.lineTo(linkX + textWidth / 2, linkY + 4);
+        ctx.stroke();
 
         ctx.textAlign = 'left';
         return;
@@ -1644,7 +1657,7 @@ function draw() {
             ctx.fillText(r.note, GAME_WIDTH/2, r.top + 150);
         });
 
-        // 【新規】④ ネタ切れと仕入れ（補充）セクションの描画
+        // ④ ネタ切れと仕入れ（補充）セクションの描画
         const r4Top = 595;
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 18px serif'; ctx.textAlign = 'center';
         ctx.fillText('④ ネタ切れと仕入れ（補充）', GAME_WIDTH/2, r4Top + 20);
