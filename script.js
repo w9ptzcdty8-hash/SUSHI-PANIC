@@ -692,7 +692,7 @@ const TOPPINGS = {
     ika:    { name: 'イカ',    category: 'nigiri', price: 400 }
 };
 
-// 【変更】ネタのみ在庫管理（初期数10個、最大10個）※シャリ・わさび・海苔は無限化
+// ネタのみ在庫管理（初期数10個、最大10個）※シャリ・わさび・海苔は無限化
 const MAX_STOCK = 10;
 let ingredientStock = {};
 
@@ -740,8 +740,8 @@ let customers = [];
 let cuttingBoard = [];
 let elapsedTime = 0;
 
-// 覆面調査員を見逃して終了したかのフラグ
-let missedInspector = false;
+// 【変更】覆面調査員警告タイマー（秒）
+let inspectorWarningTimer = 0;
 
 // 長押し補充用ステート
 let reloadingItem = null;
@@ -875,7 +875,7 @@ function startGame() {
     sfx.unlock();
     state = STATE.PLAYING;
     score = 0; rating = 3.0; servedCount = 0; customers = []; cuttingBoard = [];
-    missedInspector = false;
+    inspectorWarningTimer = 0;
     reloadingItem = null; holdTimer = 0; justCompletedReload = false;
     resetStock();
     unlockedSlots = 1;
@@ -944,7 +944,7 @@ function getItemAtCoord(vx, vy) {
     return null;
 }
 
-// 【新規】ありえない組み合わせの追加防止判定
+// ありえない組み合わせの追加防止判定
 function canAddIngredient(item) {
     const cb = cuttingBoard;
 
@@ -1248,8 +1248,11 @@ function serveCustomer(idx) {
             c.patience = 100;
         }
     } else {
-        // 覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）
+        // 【変更】覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）かつ画面左上に警告を表示
         const penalty = c.isInspector ? (RATING_CONFIG.MISS_SERVE * 2) : RATING_CONFIG.MISS_SERVE;
+        if (c.isInspector) {
+            inspectorWarningTimer = 2.5; // 2.5秒間警告ポップアップを表示
+        }
         rating = Math.max(0, rating + penalty);
         cuttingBoard = [];
         sfx.playError();
@@ -1270,6 +1273,11 @@ function update(dt) {
             justCompletedReload = true; // 放したときの誤タップ判定を回避
             sfx.playReloadComplete();
         }
+    }
+
+    // 覆面調査員警告表示タイマー減算
+    if (inspectorWarningTimer > 0) {
+        inspectorWarningTimer = Math.max(0, inspectorWarningTimer - dt);
     }
 
     const basePatienceRate = getPatienceRate();
@@ -1300,10 +1308,10 @@ function update(dt) {
         if (c.patience <= 0) {
             const slot = c.slot;
 
-            // 覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ警告表示フラグ
+            // 【変更】覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ画面左上に警告表示
             const penalty = c.isInspector ? (RATING_CONFIG.MISS_TIMEOUT * 2) : RATING_CONFIG.MISS_TIMEOUT;
             if (c.isInspector) {
-                missedInspector = true;
+                inspectorWarningTimer = 2.5; // 2.5秒間警告ポップアップを表示
             }
 
             rating = Math.max(0, rating + penalty);
@@ -1432,7 +1440,7 @@ function drawHowtoFormula(ctx, cy, slots) {
     });
 }
 
-// 【変更】長押し補充時のプログレスリング描画（大きくして上寄りへ配置）
+// 長押し補充時のプログレスリング描画（大きくして上寄りへ配置）
 function drawReloadProgress(cx, cy, progress) {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -1451,7 +1459,7 @@ function drawReloadProgress(cx, cy, progress) {
     ctx.restore();
 }
 
-// 【変更】パレット/調度品に在庫数や❌マークを描画（右寄せ＆❌拡大・位置変更）
+// パレット/調度品に在庫数や❌マークを描画（右寄せ＆❌拡大・位置変更）
 function drawStockOverlay(cx, cy, key) {
     // シャリ・わさび・海苔は在庫管理外
     if (!TOPPINGS[key]) return;
@@ -1638,13 +1646,6 @@ function draw() {
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 42px serif'; ctx.fillText('本日の営業終了', GAME_WIDTH/2, 340);
         ctx.fillStyle = '#e6c877'; ctx.font = 'bold 32px sans-serif'; ctx.fillText(`本日の売上 ￥${score.toLocaleString()}`, GAME_WIDTH/2, 400);
 
-        // 覆面調査員を見逃して評価が下がった場合の赤文字表示
-        if (missedInspector) {
-            ctx.fillStyle = '#ff4d4d';
-            ctx.font = 'bold 20px serif';
-            ctx.fillText('⚠️ 覆面調査員による評価！', GAME_WIDTH/2, 460);
-        }
-
         drawCard(ctx, 100, 560, 280, 62, '#1c3d5f');
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.fillText('また明日、タイトルへ', GAME_WIDTH/2, 599);
         ctx.textAlign = 'left';
@@ -1658,6 +1659,22 @@ function draw() {
     drawWashiCard(ctx, 10, 10, 150, 50);
     ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign='left';
     ctx.fillText(`💰￥${score}`, 20, 30); ctx.fillText(`⭐${rating.toFixed(1)}`, 20, 50);
+
+    // 【新規】プレイ中の覆面調査員警告ポップアップ表示（左上の評価欄直下）
+    if (inspectorWarningTimer > 0) {
+        ctx.save();
+        // 段階的なフェードアウト
+        const alpha = Math.min(1.0, inspectorWarningTimer / 0.5);
+        ctx.globalAlpha = alpha;
+
+        drawWashiCard(ctx, 10, 65, 200, 26, 6);
+        ctx.fillStyle = '#d9381e';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚠️ 覆面調査員による評価！', 110, 78);
+        ctx.restore();
+    }
 
     drawWashiCard(ctx, 410, 10, 58, 45);
     ctx.fillStyle = '#1c3d5f'; ctx.fillRect(430, 20, 6, 25); ctx.fillRect(442, 20, 6, 25);
