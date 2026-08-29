@@ -740,8 +740,16 @@ let customers = [];
 let cuttingBoard = [];
 let elapsedTime = 0;
 
-// 【変更】覆面調査員警告タイマー（秒）
-let inspectorWarningTimer = 0;
+// 【新規】電光掲示板（テロップ）用メッセージ管理
+let tickerQueue = [];
+let currentTickerText = "";
+let tickerX = GAME_WIDTH;
+
+function addTickerMessage(text) {
+    if (!tickerQueue.includes(text) && currentTickerText !== text) {
+        tickerQueue.push(text);
+    }
+}
 
 // 長押し補充用ステート
 let reloadingItem = null;
@@ -875,7 +883,7 @@ function startGame() {
     sfx.unlock();
     state = STATE.PLAYING;
     score = 0; rating = 3.0; servedCount = 0; customers = []; cuttingBoard = [];
-    inspectorWarningTimer = 0;
+    tickerQueue = []; currentTickerText = ""; tickerX = GAME_WIDTH;
     reloadingItem = null; holdTimer = 0; justCompletedReload = false;
     resetStock();
     unlockedSlots = 1;
@@ -1048,12 +1056,12 @@ function handleTouchDown(x, y) {
         if (item) {
             justCompletedReload = false;
 
-            // ネタアイテムかつまな板が空、かつ在庫が9個以下なら長押し補充の判定を開始
-            if (TOPPINGS[item] && cuttingBoard.length === 0 && ingredientStock[item] < MAX_STOCK) {
+            // 【変更】まな板の状態に関わらず、在庫が9個以下なら長押し補充判定を開始
+            if (TOPPINGS[item] && ingredientStock[item] < MAX_STOCK) {
                 reloadingItem = item;
                 holdTimer = 0;
             } else {
-                // シャリ・わさび・海苔、あるいは長押し補充対象外のときは即座に追加試行
+                // シャリ・わさび・海苔、あるいは在庫満タン時は即座に追加試行
                 tryAddIngredient(item);
             }
         }
@@ -1097,6 +1105,10 @@ function addIngredient(item) {
     // ネタアイテムの場合のみ在庫減少
     if (TOPPINGS[item]) {
         ingredientStock[item]--;
+        // 【新規】在庫が0になったら電光掲示板に警告追加
+        if (ingredientStock[item] === 0) {
+            addTickerMessage(`⚠️ ${TOPPINGS[item].name}が在庫切れ！`);
+        }
     }
     sfx.playTap();
 }
@@ -1248,10 +1260,10 @@ function serveCustomer(idx) {
             c.patience = 100;
         }
     } else {
-        // 【変更】覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）かつ画面左上に警告を表示
+        // 【変更】覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）かつ電光掲示板に警告表示
         const penalty = c.isInspector ? (RATING_CONFIG.MISS_SERVE * 2) : RATING_CONFIG.MISS_SERVE;
         if (c.isInspector) {
-            inspectorWarningTimer = 2.5; // 2.5秒間警告ポップアップを表示
+            addTickerMessage('⚠️ 覆面調査員による減点！');
         }
         rating = Math.max(0, rating + penalty);
         cuttingBoard = [];
@@ -1263,8 +1275,8 @@ function serveCustomer(idx) {
 function update(dt) {
     if (state !== STATE.PLAYING) return;
 
-    // 長押し補充タイマーの進捗処理
-    if (reloadingItem && cuttingBoard.length === 0) {
+    // 【変更】長押し補充タイマーの進捗処理（まな板に関わらず動作）
+    if (reloadingItem) {
         holdTimer += dt;
         if (holdTimer >= HOLD_TIME_REQUIRED) {
             ingredientStock[reloadingItem] = MAX_STOCK;
@@ -1275,9 +1287,20 @@ function update(dt) {
         }
     }
 
-    // 覆面調査員警告表示タイマー減算
-    if (inspectorWarningTimer > 0) {
-        inspectorWarningTimer = Math.max(0, inspectorWarningTimer - dt);
+    // 【新規】電光掲示板（マーキーテロップ）更新ロジック
+    if (!currentTickerText && tickerQueue.length > 0) {
+        currentTickerText = tickerQueue.shift();
+        tickerX = GAME_WIDTH;
+    }
+
+    if (currentTickerText) {
+        tickerX -= dt * 180; // スクロール速度（180px/s）
+        ctx.font = 'bold 15px sans-serif';
+        const textWidth = ctx.measureText(currentTickerText).width;
+        if (tickerX < -textWidth) {
+            currentTickerText = "";
+            tickerX = GAME_WIDTH;
+        }
     }
 
     const basePatienceRate = getPatienceRate();
@@ -1308,10 +1331,10 @@ function update(dt) {
         if (c.patience <= 0) {
             const slot = c.slot;
 
-            // 【変更】覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ画面左上に警告表示
+            // 【変更】覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ電光掲示板に警告表示
             const penalty = c.isInspector ? (RATING_CONFIG.MISS_TIMEOUT * 2) : RATING_CONFIG.MISS_TIMEOUT;
             if (c.isInspector) {
-                inspectorWarningTimer = 2.5; // 2.5秒間警告ポップアップを表示
+                addTickerMessage('⚠️ 覆面調査員による減点！');
             }
 
             rating = Math.max(0, rating + penalty);
@@ -1440,7 +1463,7 @@ function drawHowtoFormula(ctx, cy, slots) {
     });
 }
 
-// 長押し補充時のプログレスリング描画（大きくして上寄りへ配置）
+// 長押し補充時のプログレスリング描画
 function drawReloadProgress(cx, cy, progress) {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -1459,25 +1482,57 @@ function drawReloadProgress(cx, cy, progress) {
     ctx.restore();
 }
 
-// パレット/調度品に在庫数や❌マークを描画（右寄せ＆❌拡大・位置変更）
-function drawStockOverlay(cx, cy, key) {
-    // シャリ・わさび・海苔は在庫管理外
+// 【変更】パレットに在庫数、点滅表示、および「売切御免！」帯を描画
+function drawStockOverlay(px, py, w, h, key) {
     if (!TOPPINGS[key]) return;
 
     const count = ingredientStock[key] ?? 0;
+    const cx = px + w/2;
+    const cy = py + h/2;
+
     if (count <= 0) {
         ctx.save();
-        ctx.fillStyle = 'rgba(200, 30, 30, 0.9)';
-        ctx.font = 'bold 44px sans-serif';
+        // ① 在庫切れのグレーアウト（暗転）
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.beginPath(); ctx.roundRect(px, py, w, h, 13); ctx.fill();
+
+        // ② 太い赤枠で囲む
+        ctx.strokeStyle = '#d9381e';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.roundRect(px+1, py+1, w-2, h-2, 12); ctx.stroke();
+
+        // ③ 斜めの赤帯＋「売切御免！」描画
+        ctx.translate(cx, cy);
+        ctx.rotate(-15 * Math.PI / 180);
+
+        ctx.fillStyle = '#d9381e';
+        ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 6;
+        ctx.fillRect(-w*0.6, -14, w*1.2, 28);
+        ctx.shadowColor = 'transparent';
+
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+        ctx.strokeRect(-w*0.6, -12, w*1.2, 24);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('❌', cx, cy - 8); // やや上に移動
+        ctx.fillText('売切御免！', 0, 1);
+
         ctx.restore();
     } else {
         ctx.save();
-        ctx.fillStyle = count <= 3 ? '#d9381e' : '#1c3d5f';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-        ctx.fillText(`x${count}`, cx + 56, cy + 32); // より右端へ配置
+        // 残り1個のときは点滅（パルス効果）
+        let isFlashVisible = true;
+        if (count === 1) {
+            isFlashVisible = Math.floor(elapsedTime * 6) % 2 === 0;
+        }
+
+        if (isFlashVisible) {
+            ctx.fillStyle = count === 1 ? '#ff1a1a' : (count <= 3 ? '#d9381e' : '#1c3d5f');
+            ctx.font = count === 1 ? 'bold 16px sans-serif' : 'bold 13px sans-serif';
+            ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+            ctx.fillText(`x${count}`, px + w - 10, py + h - 8);
+        }
         ctx.restore();
     }
 }
@@ -1660,24 +1715,30 @@ function draw() {
     ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign='left';
     ctx.fillText(`💰￥${score}`, 20, 30); ctx.fillText(`⭐${rating.toFixed(1)}`, 20, 50);
 
-    // 【新規】プレイ中の覆面調査員警告ポップアップ表示（左上の評価欄直下）
-    if (inspectorWarningTimer > 0) {
-        ctx.save();
-        // 段階的なフェードアウト
-        const alpha = Math.min(1.0, inspectorWarningTimer / 0.5);
-        ctx.globalAlpha = alpha;
-
-        drawWashiCard(ctx, 10, 65, 200, 26, 6);
-        ctx.fillStyle = '#d9381e';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('⚠️ 覆面調査員による評価！', 110, 78);
-        ctx.restore();
-    }
-
     drawWashiCard(ctx, 410, 10, 58, 45);
     ctx.fillStyle = '#1c3d5f'; ctx.fillRect(430, 20, 6, 25); ctx.fillRect(442, 20, 6, 25);
+
+    // 【新規】画面横いっぱいの電光掲示板（マーキーテロップ表示）
+    if (currentTickerText) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 15, 15, 0.9)';
+        ctx.fillRect(0, 65, GAME_WIDTH, 24);
+
+        ctx.strokeStyle = '#d9381e';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(0, 65, GAME_WIDTH, 24);
+
+        // クリッピング領域を設定して画面外へのはみ出しを防止
+        ctx.beginPath();
+        ctx.rect(0, 65, GAME_WIDTH, 24);
+        ctx.clip();
+
+        ctx.fillStyle = '#ff4d4d';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(currentTickerText, tickerX, 77);
+        ctx.restore();
+    }
 
     // カウンターのお客さん
     for (let i = 0; i < CUSTOMER_SLOTS; i++) {
@@ -1741,11 +1802,11 @@ function draw() {
         const paletteKey = (k === 'ikura' || k === 'uni') ? k + '_bowl' : k;
         ctx.drawImage(assets[paletteKey], px+5, py-2);
 
-        // 在庫数・❌表示を描画
-        drawStockOverlay(px + 65, py + 37, k);
+        // 在庫数・売切帯表示を描画
+        drawStockOverlay(px, py, 130, 75, k);
 
         // 長押し補充プログレスリングを描画（中央やや上寄り）
-        if (reloadingItem === k && cuttingBoard.length === 0) {
+        if (reloadingItem === k) {
             drawReloadProgress(px + 65, py + 30, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
         }
     });
