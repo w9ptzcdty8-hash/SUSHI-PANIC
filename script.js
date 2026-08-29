@@ -1464,7 +1464,7 @@ function drawHowtoFormula(ctx, cy, slots) {
     });
 }
 
-// 【変更】長押し補充時のプログレスリング描画（拡大・少し遅れて描画開始）
+// 長押し補充時のプログレスリング描画（拡大・少し遅れて描画開始）
 function drawReloadProgress(cx, cy, progress) {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -1711,8 +1711,13 @@ function draw() {
                 drawWashiCard(ctx, 40, y, 400, 85, 14);
 
                 ctx.fillStyle = '#1c3d5f';
-                ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'left';
-                ctx.fillText(medals[i], 60, y + 50);
+                // メダル表示を3倍（24px -> 72px）に拡大し、上下中央に配置
+                ctx.font = 'bold 72px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(medals[i], 50, y + 43);
+
+                ctx.textBaseline = 'alphabetic'; // 以降の描画のためベースラインを元に戻す
 
                 ctx.font = 'bold 26px serif'; ctx.textAlign = 'right';
                 ctx.fillStyle = '#d9381e';
@@ -1844,7 +1849,7 @@ function draw() {
         // 在庫数・売切帯表示を描画
         drawStockOverlay(px, py, 130, 75, k);
 
-        // 【変更】長押し補充プログレスリングを描画（指定時間経過後に表示）
+        // 長押し補充プログレスリングを描画（指定時間経過後に表示）
         if (reloadingItem === k && holdTimer >= RING_SHOW_DELAY) {
             drawReloadProgress(px + 65, py + 30, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
         }
