@@ -1705,7 +1705,7 @@ function draw() {
             const startY = 110;
             const rowH = 105;
             const medals = ['🥇', '🥈', '🥉', ' 4位', ' 5位'];
-            const medalSizes = [72, 40, 32, 26, 26]; // 各順位文字サイズ
+            const medalSizes = [72, 72, 72, 26, 26]; // 各順位文字サイズ
 
             scores.forEach((sc, i) => {
                 const y = startY + i * rowH;
