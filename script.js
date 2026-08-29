@@ -1711,18 +1711,18 @@ function draw() {
                 drawWashiCard(ctx, 40, y, 400, 85, 14);
 
                 ctx.fillStyle = '#1c3d5f';
-                // メダル表示を3倍（24px -> 72px）に拡大し、上下中央に配置
-                ctx.font = 'bold 72px sans-serif';
+                // 順位
+                ctx.font = i >= 3 ? 'bold 32px sans-serif' : 'bold 72px sans-serif'; // メダル表示を72px、４，５位を32px
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(medals[i], 50, y + 43);
 
                 ctx.textBaseline = 'alphabetic'; // 以降の描画のためベースラインを元に戻す
-
+                // スコア
                 ctx.font = 'bold 26px serif'; ctx.textAlign = 'right';
                 ctx.fillStyle = '#d9381e';
                 ctx.fillText(`￥${sc.score.toLocaleString()}`, 410, y + 43);
-
+                // 日付
                 ctx.font = '12px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.6)';
                 ctx.fillText(sc.date, 410, y + 68);
             });
