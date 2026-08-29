@@ -692,7 +692,7 @@ const TOPPINGS = {
     ika:    { name: 'イカ',    category: 'nigiri', price: 400 }
 };
 
-// 【新規】ネタ・材料の在庫数管理（初期数10個、最大10個）
+// 【変更】ネタのみ在庫管理（初期数10個、最大10個）※シャリ・わさび・海苔は無限化
 const MAX_STOCK = 10;
 let ingredientStock = {};
 
@@ -700,8 +700,7 @@ function resetStock() {
     ingredientStock = {
         maguro: MAX_STOCK, salmon: MAX_STOCK, ikura: MAX_STOCK,
         tamago: MAX_STOCK, ebi: MAX_STOCK, buri: MAX_STOCK,
-        uni: MAX_STOCK, anago: MAX_STOCK, ika: MAX_STOCK,
-        wasabi: MAX_STOCK, nori: MAX_STOCK, rice: MAX_STOCK
+        uni: MAX_STOCK, anago: MAX_STOCK, ika: MAX_STOCK
     };
 }
 
@@ -741,12 +740,13 @@ let customers = [];
 let cuttingBoard = [];
 let elapsedTime = 0;
 
-// 【新規】覆面調査員を見逃して終了したかのフラグ
+// 覆面調査員を見逃して終了したかのフラグ
 let missedInspector = false;
 
-// 【新規】長押し補充用ステート
+// 長押し補充用ステート
 let reloadingItem = null;
 let holdTimer = 0;
+let justCompletedReload = false; // 長押し完了直後のタップ誤判定防止用
 const HOLD_TIME_REQUIRED = 0.8; // 長押しに必要な時間（0.8秒）
 
 // ========================================
@@ -876,7 +876,7 @@ function startGame() {
     state = STATE.PLAYING;
     score = 0; rating = 3.0; servedCount = 0; customers = []; cuttingBoard = [];
     missedInspector = false;
-    reloadingItem = null; holdTimer = 0;
+    reloadingItem = null; holdTimer = 0; justCompletedReload = false;
     resetStock();
     unlockedSlots = 1;
     spawnCustomer(0);
@@ -885,7 +885,7 @@ function startGame() {
 function pauseGame() {
     if (state !== STATE.PLAYING) return;
     state = STATE.PAUSED;
-    reloadingItem = null; holdTimer = 0;
+    reloadingItem = null; holdTimer = 0; justCompletedReload = false;
 }
 
 function resumeGame() {
@@ -896,7 +896,7 @@ function resumeGame() {
 function endGame() {
     saveHighScore(score);
     state = STATE.GAMEOVER;
-    reloadingItem = null; holdTimer = 0;
+    reloadingItem = null; holdTimer = 0; justCompletedReload = false;
 }
 
 // ========================================
@@ -942,6 +942,55 @@ function getItemAtCoord(vx, vy) {
     if (vx >= 5 && vx <= 185 && vy >= 605 && vy <= 785) return 'rice';
 
     return null;
+}
+
+// 【新規】ありえない組み合わせの追加防止判定
+function canAddIngredient(item) {
+    const cb = cuttingBoard;
+
+    // まな板の上限（4個）
+    if (cb.length >= 4) return false;
+
+    // シャリが置いていない状態ではシャリ以外置けない
+    if (cb.length === 0) {
+        return item === 'rice';
+    }
+
+    // すでに完成品判定がある場合は追加不可
+    if (getPreparedSushi() !== null) return false;
+
+    const topping = TOPPINGS[item];
+
+    // ① シャリだけが載っている場合
+    if (cb.length === 1 && cb[0] === 'rice') {
+        if (item === 'wasabi') return true;
+        if (item === 'nori') return true;
+        if (topping) return true; // 全ネタ（にぎり・軍艦・たまご）可
+        return false;
+    }
+
+    // ② シャリ ＋ わさび
+    if (cb.length === 2 && cb[0] === 'rice' && cb[1] === 'wasabi') {
+        // にぎりネタのみ可
+        return topping && topping.category === 'nigiri';
+    }
+
+    // ③ シャリ ＋ のり （軍艦・たまご準備）
+    if (cb.length === 2 && cb[0] === 'rice' && cb[1] === 'nori') {
+        // 軍艦ネタ（イクラ・ウニ）のみ可
+        return topping && topping.category === 'gunkan';
+    }
+
+    // ④ シャリ ＋ ネタ （たまご・アナゴ等）
+    if (cb.length === 2 && cb[0] === 'rice' && TOPPINGS[cb[1]]) {
+        // たまごカテゴリネタ（たまご・アナゴ）の上に『のり』を巻く場合のみ可
+        if (TOPPINGS[cb[1]].category === 'tamago' && item === 'nori') {
+            return true;
+        }
+        return false;
+    }
+
+    return false;
 }
 
 function handleTouchDown(x, y) {
@@ -997,34 +1046,59 @@ function handleTouchDown(x, y) {
         // パレット・食材判定（タップ＆長押し開始）
         const item = getItemAtCoord(vx, vy);
         if (item) {
-            // まな板が空で、かつ在庫が9個以下なら長押し補充の判定を開始
-            if (cuttingBoard.length === 0 && ingredientStock[item] < MAX_STOCK) {
+            justCompletedReload = false;
+
+            // ネタアイテムかつまな板が空、かつ在庫が9個以下なら長押し補充の判定を開始
+            if (TOPPINGS[item] && cuttingBoard.length === 0 && ingredientStock[item] < MAX_STOCK) {
                 reloadingItem = item;
                 holdTimer = 0;
-            }
-
-            // 在庫があれば即座に追加
-            if (ingredientStock[item] > 0) {
-                addIngredient(item);
             } else {
-                sfx.playError();
+                // シャリ・わさび・海苔、あるいは長押し補充対象外のときは即座に追加試行
+                tryAddIngredient(item);
             }
         }
     }
 }
 
-function handleTouchUp() {
+function handleTouchUp(x, y) {
+    if (state !== STATE.PLAYING) return;
+
+    // 長押し補充が完了しておらず、タップ判定として処理する場合
+    if (reloadingItem && !justCompletedReload) {
+        tryAddIngredient(reloadingItem);
+    }
+
     reloadingItem = null;
     holdTimer = 0;
+    justCompletedReload = false;
+}
+
+function tryAddIngredient(item) {
+    if (!canAddIngredient(item)) return; // 無効な組み合わせは反応しない
+
+    // 無限化アイテム（シャリ・わさび・海苔）
+    if (item === 'rice' || item === 'wasabi' || item === 'nori') {
+        addIngredient(item);
+        return;
+    }
+
+    // ネタアイテム（在庫チェック）
+    if (ingredientStock[item] > 0) {
+        addIngredient(item);
+    } else {
+        sfx.playError();
+    }
 }
 
 function addIngredient(item) {
     if (item === 'rice' && cuttingBoard.length > 0) cuttingBoard = [];
-    if (cuttingBoard.length < 4 && ingredientStock[item] > 0) {
-        cuttingBoard.push(item);
+    cuttingBoard.push(item);
+
+    // ネタアイテムの場合のみ在庫減少
+    if (TOPPINGS[item]) {
         ingredientStock[item]--;
-        sfx.playTap();
     }
+    sfx.playTap();
 }
 
 function initInputHandlers() {
@@ -1035,12 +1109,12 @@ function initInputHandlers() {
     }, { passive: false });
 
     stage.addEventListener("pointerup", (e) => {
-        handleTouchUp();
+        handleTouchUp(e.clientX, e.clientY);
         e.preventDefault();
     }, { passive: false });
 
     stage.addEventListener("pointercancel", (e) => {
-        handleTouchUp();
+        handleTouchUp(e.clientX, e.clientY);
         e.preventDefault();
     }, { passive: false });
 }
@@ -1080,7 +1154,7 @@ function spawnCustomer(slot) {
     const isSabiNuki = (TOPPINGS[rKey].category === 'nigiri') ? (Math.random() < 0.3) : false;
     const isVip = Math.random() < 0.20;
 
-    // 【新規】覆面調査員（10%）と短気客（15%）のフラグ判定
+    // 覆面調査員（10%）と短気客（15%）のフラグ判定
     const isInspector = Math.random() < 0.10;
     const isImpatient = Math.random() < 0.15;
 
@@ -1174,7 +1248,7 @@ function serveCustomer(idx) {
             c.patience = 100;
         }
     } else {
-        // 【変更】覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）
+        // 覆面調査員へ誤提供した場合、評判減少量が2倍（-1.0）
         const penalty = c.isInspector ? (RATING_CONFIG.MISS_SERVE * 2) : RATING_CONFIG.MISS_SERVE;
         rating = Math.max(0, rating + penalty);
         cuttingBoard = [];
@@ -1186,13 +1260,14 @@ function serveCustomer(idx) {
 function update(dt) {
     if (state !== STATE.PLAYING) return;
 
-    // 【新規】長押し補充タイマーの進捗処理
+    // 長押し補充タイマーの進捗処理
     if (reloadingItem && cuttingBoard.length === 0) {
         holdTimer += dt;
         if (holdTimer >= HOLD_TIME_REQUIRED) {
             ingredientStock[reloadingItem] = MAX_STOCK;
             reloadingItem = null;
             holdTimer = 0;
+            justCompletedReload = true; // 放したときの誤タップ判定を回避
             sfx.playReloadComplete();
         }
     }
@@ -1225,7 +1300,7 @@ function update(dt) {
         if (c.patience <= 0) {
             const slot = c.slot;
 
-            // 【変更】覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ警告表示フラグ
+            // 覆面調査員を見逃した場合、評判減少量が2倍（-1.6）かつ警告表示フラグ
             const penalty = c.isInspector ? (RATING_CONFIG.MISS_TIMEOUT * 2) : RATING_CONFIG.MISS_TIMEOUT;
             if (c.isInspector) {
                 missedInspector = true;
@@ -1357,41 +1432,44 @@ function drawHowtoFormula(ctx, cy, slots) {
     });
 }
 
-// 【新規】長押し補充時のプログレスリングを描画するヘルパー
+// 【変更】長押し補充時のプログレスリング描画（大きくして上寄りへ配置）
 function drawReloadProgress(cx, cy, progress) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.beginPath(); ctx.arc(cx, cy, 28, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.beginPath(); ctx.arc(cx, cy, 32, 0, Math.PI*2); ctx.fill();
 
     ctx.strokeStyle = '#f6ecd9';
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 8;
     ctx.beginPath();
-    ctx.arc(cx, cy, 22, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * progress);
+    ctx.arc(cx, cy, 26, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * progress);
     ctx.stroke();
 
     ctx.fillStyle = '#f6ecd9';
-    ctx.font = 'bold 11px sans-serif';
+    ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('補充中', cx, cy);
     ctx.restore();
 }
 
-// 【新規】ネタパレット/調度品に在庫数や❌マークを描画するヘルパー
+// 【変更】パレット/調度品に在庫数や❌マークを描画（右寄せ＆❌拡大・位置変更）
 function drawStockOverlay(cx, cy, key) {
-    const count = ingredientStock[key] || 0;
+    // シャリ・わさび・海苔は在庫管理外
+    if (!TOPPINGS[key]) return;
+
+    const count = ingredientStock[key] ?? 0;
     if (count <= 0) {
         ctx.save();
-        ctx.fillStyle = 'rgba(200, 30, 30, 0.85)';
-        ctx.font = 'bold 36px sans-serif';
+        ctx.fillStyle = 'rgba(200, 30, 30, 0.9)';
+        ctx.font = 'bold 44px sans-serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('❌', cx, cy);
+        ctx.fillText('❌', cx, cy - 8); // やや上に移動
         ctx.restore();
     } else {
         ctx.save();
         ctx.fillStyle = count <= 3 ? '#d9381e' : '#1c3d5f';
-        ctx.font = 'bold 12px sans-serif';
+        ctx.font = 'bold 13px sans-serif';
         ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-        ctx.fillText(`x${count}`, cx + 28, cy + 28);
+        ctx.fillText(`x${count}`, cx + 56, cy + 32); // より右端へ配置
         ctx.restore();
     }
 }
@@ -1560,7 +1638,7 @@ function draw() {
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 42px serif'; ctx.fillText('本日の営業終了', GAME_WIDTH/2, 340);
         ctx.fillStyle = '#e6c877'; ctx.font = 'bold 32px sans-serif'; ctx.fillText(`本日の売上 ￥${score.toLocaleString()}`, GAME_WIDTH/2, 400);
 
-        // 【新規】覆面調査員を見逃して評価が下がった場合の赤文字表示
+        // 覆面調査員を見逃して評価が下がった場合の赤文字表示
         if (missedInspector) {
             ctx.fillStyle = '#ff4d4d';
             ctx.font = 'bold 20px serif';
@@ -1646,33 +1724,19 @@ function draw() {
         const paletteKey = (k === 'ikura' || k === 'uni') ? k + '_bowl' : k;
         ctx.drawImage(assets[paletteKey], px+5, py-2);
 
-        // 【新規】在庫数・❌表示を描画
+        // 在庫数・❌表示を描画
         drawStockOverlay(px + 65, py + 37, k);
 
-        // 【新規】長押し補充プログレスリングを描画
+        // 長押し補充プログレスリングを描画（中央やや上寄り）
         if (reloadingItem === k && cuttingBoard.length === 0) {
-            drawReloadProgress(px + 65, py + 37, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
+            drawReloadProgress(px + 65, py + 30, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
         }
     });
 
-    // 下部調理場
+    // 下部調理場（わさび・のり・シャリは在庫数・プログレスリングなし）
     ctx.drawImage(assets['wasabi_plate'], 15, 520);
-    drawStockOverlay(15 + 40, 520 + 40, 'wasabi');
-    if (reloadingItem === 'wasabi' && cuttingBoard.length === 0) {
-        drawReloadProgress(15 + 40, 520 + 40, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
-    }
-
     ctx.drawImage(assets['nori_plate'], 95, 520);
-    drawStockOverlay(95 + 40, 520 + 40, 'nori');
-    if (reloadingItem === 'nori' && cuttingBoard.length === 0) {
-        drawReloadProgress(95 + 40, 520 + 40, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
-    }
-
     ctx.drawImage(assets['hangiri'], 5, 605);
-    drawStockOverlay(5 + 90, 605 + 90, 'rice');
-    if (reloadingItem === 'rice' && cuttingBoard.length === 0) {
-        drawReloadProgress(5 + 90, 605 + 90, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
-    }
 
     ctx.drawImage(assets['manaita'], 180, 535);
     ctx.drawImage(assets['knife'], 180, 770);
