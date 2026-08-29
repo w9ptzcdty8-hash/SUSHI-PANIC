@@ -756,6 +756,7 @@ let reloadingItem = null;
 let holdTimer = 0;
 let justCompletedReload = false; // 長押し完了直後のタップ誤判定防止用
 const HOLD_TIME_REQUIRED = 0.8; // 長押しに必要な時間（0.8秒）
+const RING_SHOW_DELAY = 0.15; // リング表示を開始する経過時間（0.15秒）
 
 // ========================================
 // ハイスコア管理 (localStorage)
@@ -1463,20 +1464,20 @@ function drawHowtoFormula(ctx, cy, slots) {
     });
 }
 
-// 長押し補充時のプログレスリング描画
+// 長押し補充時のプログレスリング描画（拡大・少し遅れて描画開始）
 function drawReloadProgress(cx, cy, progress) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.beginPath(); ctx.arc(cx, cy, 32, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI*2); ctx.fill();
 
     ctx.strokeStyle = '#f6ecd9';
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 10;
     ctx.beginPath();
-    ctx.arc(cx, cy, 26, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * progress);
+    ctx.arc(cx, cy, 31, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * progress);
     ctx.stroke();
 
     ctx.fillStyle = '#f6ecd9';
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = 'bold 13px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('補充中', cx, cy);
     ctx.restore();
@@ -1579,9 +1580,22 @@ function draw() {
         drawWashiCard(ctx, 250, 716, 140, 50, 12);
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 17px serif'; ctx.fillText('ハイスコア', 320, 747);
 
+        // Canvas描画によるアンダーライン付き外部リンクテキスト
+        const linkText = 'Produced by MRS GAMES';
+        const linkX = GAME_WIDTH / 2;
+        const linkY = 805;
+
         ctx.fillStyle = 'rgba(246,236,217,0.85)';
         ctx.font = '13px sans-serif';
-        ctx.fillText('Produced by MRS GAMES 🌐', GAME_WIDTH/2, 805);
+        ctx.fillText(linkText, linkX, linkY);
+
+        const textWidth = ctx.measureText(linkText).width;
+        ctx.strokeStyle = 'rgba(246,236,217,0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(linkX - textWidth / 2, linkY + 4);
+        ctx.lineTo(linkX + textWidth / 2, linkY + 4);
+        ctx.stroke();
 
         ctx.textAlign = 'left';
         return;
@@ -1644,12 +1658,12 @@ function draw() {
             ctx.fillText(r.note, GAME_WIDTH/2, r.top + 150);
         });
 
-        // 【新規】④ ネタ切れと仕入れ（補充）セクションの描画
+        // ④ ネタ切れと仕入れ（補充）セクションの描画
         const r4Top = 595;
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 18px serif'; ctx.textAlign = 'center';
         ctx.fillText('④ ネタ切れと仕入れ（補充）', GAME_WIDTH/2, r4Top + 20);
         ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.7)';
-        ctx.fillText('各ネタの最大在庫は10個（シャリ・わさび・海苔は無限）', GAME_WIDTH/2, r4Top + 36);
+        ctx.fillText('ネタは使用すると在庫が減る。', GAME_WIDTH/2, r4Top + 36);
 
         // ミニサンプルの描画
         ctx.save();
@@ -1667,7 +1681,7 @@ function draw() {
         ctx.restore();
 
         ctx.fillStyle = 'rgba(28,61,95,0.85)'; ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('使いたいネタのカードを【長押し（約0.8秒）】でいつでも補充可能！', GAME_WIDTH/2, r4Top + 120);
+        ctx.fillText('使いたいネタを長押しで補充可能！', GAME_WIDTH/2, r4Top + 120);
 
         drawCard(ctx, 100, 765, 280, 55, '#1c3d5f');
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
@@ -1690,20 +1704,26 @@ function draw() {
         } else {
             const startY = 110;
             const rowH = 105;
-            const medals = ['🥇', '🥈', '🥉', '4位', '5位'];
+            const medals = ['🥇', '🥈', '🥉', ' 4位', ' 5位'];
+            const medalSizes = [72, 72, 72, 26, 26]; // 各順位文字サイズ
 
             scores.forEach((sc, i) => {
                 const y = startY + i * rowH;
                 drawWashiCard(ctx, 40, y, 400, 85, 14);
+                
+                // 順位表示
+                ctx.font = `bold ${medalSizes[i]}px sans-serif`; //順位文字サイズ・フォント
+                ctx.fillStyle = '#1c3d5f'; //順位文字色
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(medals[i], 50, y + 43);
 
-                ctx.fillStyle = '#1c3d5f';
-                ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'left';
-                ctx.fillText(medals[i], 60, y + 50);
-
+                ctx.textBaseline = 'alphabetic'; // 以降の描画のためベースラインを元に戻す
+                // スコア
                 ctx.font = 'bold 26px serif'; ctx.textAlign = 'right';
                 ctx.fillStyle = '#d9381e';
                 ctx.fillText(`￥${sc.score.toLocaleString()}`, 410, y + 43);
-
+                // 日付
                 ctx.font = '12px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.6)';
                 ctx.fillText(sc.date, 410, y + 68);
             });
@@ -1830,8 +1850,8 @@ function draw() {
         // 在庫数・売切帯表示を描画
         drawStockOverlay(px, py, 130, 75, k);
 
-        // 長押し補充プログレスリングを描画（中央やや上寄り）
-        if (reloadingItem === k) {
+        // 長押し補充プログレスリングを描画（指定時間経過後に表示）
+        if (reloadingItem === k && holdTimer >= RING_SHOW_DELAY) {
             drawReloadProgress(px + 65, py + 30, Math.min(1.0, holdTimer / HOLD_TIME_REQUIRED));
         }
     });
