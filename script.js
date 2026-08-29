@@ -16,6 +16,16 @@ const STATE = {
 };
 
 // ========================================
+// バランス調整用パラメータ（調整しやすいようにまとめて定義）
+// ========================================
+const RATING_CONFIG = {
+    SUCCESS_EACH: 0.01,  // 提供成功（途中皿）時の評判増加量
+    SUCCESS_FULL: 0.3,   // 満足退店（規定皿達成）時の評判増加量
+    MISS_SERVE: -0.5,    // 誤提供（間違えた寿司）時の評判減少量
+    MISS_TIMEOUT: -0.8,  // タイムアウト（見逃し）時の評判減少量
+};
+
+// ========================================
 // DOM参照
 // ========================================
 
@@ -582,7 +592,6 @@ function renderUniCluster(cCtx, cx, cy, rx, ry, spacing) {
         path.quadraticCurveTo(-10, -8, -2, -6);
         path.quadraticCurveTo(4, -9, 9, -3);
         path.quadraticCurveTo(13, 2, 8, 6);
-        path.quadraticCurveTo(2, 9, -4, 6);
         path.quadraticCurveTo(-10, 7, -14, 0);
         path.closePath();
         const pal = palettes[Math.floor(Math.random()*palettes.length)];
@@ -671,15 +680,15 @@ function renderShari(cCtx, w, h) {
 
 // ネタデータ
 const TOPPINGS = {
-    maguro: { name: 'マグロ', category: 'nigiri', price: 300 },
-    salmon: { name: 'サーモン', category: 'nigiri', price: 300 },
-    ikura:  { name: 'イクラ',  category: 'gunkan', price: 500 },
-    tamago: { name: 'たまご', category: 'tamago', price: 200 },
-    ebi:    { name: 'エビ',    category: 'nigiri', price: 400 },
-    buri:   { name: 'ぶり',    category: 'nigiri', price: 500 },
-    uni:    { name: 'ウニ',    category: 'gunkan', price: 700 },
-    anago:  { name: 'アナゴ', category: 'tamago', price: 500 },
-    ika:    { name: 'イカ',    category: 'nigiri', price: 300 }
+    maguro: { name: 'マグロ', category: 'nigiri', price: 500 },
+    salmon: { name: 'サーモン', category: 'nigiri', price: 600 },
+    ikura:  { name: 'イクラ',  category: 'gunkan', price: 800 },
+    tamago: { name: 'たまご', category: 'tamago', price: 300 },
+    ebi:    { name: 'エビ',    category: 'nigiri', price: 450 },
+    buri:   { name: 'ぶり',    category: 'nigiri', price: 700 },
+    uni:    { name: 'ウニ',    category: 'gunkan', price: 850 },
+    anago:  { name: 'アナゴ', category: 'tamago', price: 750 },
+    ika:    { name: 'イカ',    category: 'nigiri', price: 400 }
 };
 
 function initAssets() {
@@ -891,13 +900,9 @@ function handleTouch(x, y) {
     const vy = (y - rect.top) * scaleY;
 
     if (state === STATE.TITLE) {
-        // スタート
         if (vx >= 90 && vx <= 390 && vy >= 630 && vy <= 702) { startGame(); sfx.playTap(); }
-        // 遊び方
         else if (vx >= 90 && vx <= 230 && vy >= 716 && vy <= 766) { goToHowto(); sfx.playTap(); }
-        // ハイスコア
         else if (vx >= 250 && vx <= 390 && vy >= 716 && vy <= 766) { goToHighscore(); sfx.playTap(); }
-        // MRS GAMES リンク
         else if (vx >= 140 && vx <= 340 && vy >= 780 && vy <= 830) {
             window.location.href = 'https://mrs-games.pages.dev';
             sfx.playTap();
@@ -993,6 +998,11 @@ function spawnCustomer(slot) {
     const isVip = Math.random() < 0.20;
     const speedFactor = 0.7 + Math.random() * 0.8;
 
+    // 【新規】満足退店までの必要皿数を設定（通常客: 3〜5皿, VIP: 5〜8皿）
+    const targetEatenCount = isVip
+        ? Math.floor(Math.random() * 4) + 5  // 5〜8皿
+        : Math.floor(Math.random() * 3) + 3; // 3〜5皿
+
     customers.push({
         slot,
         key: rKey,
@@ -1002,6 +1012,7 @@ function spawnCustomer(slot) {
         isSabiNuki: isSabiNuki,
         isVip: isVip,
         eatenCount: 0,
+        targetEatenCount: targetEatenCount, // 満足退店する必要皿数
         patience: 100,
         maxPatience: 100,
         patienceSpeedFactor: speedFactor,
@@ -1059,18 +1070,22 @@ function serveCustomer(idx) {
 
         unlockNewSeatsIfNeeded();
 
-        if (c.eatenCount >= 3) {
-            rating = Math.min(MAX_RATING, rating + 0.5);
+        // 規定皿（通常: 3~5皿, VIP: 5~8皿）に達したら満足して退店
+        if (c.eatenCount >= c.targetEatenCount) {
+            // 【評判設定】満足退店時の評判加算 (+0.3)
+            rating = Math.min(MAX_RATING, rating + RATING_CONFIG.SUCCESS_FULL);
             const slot = c.slot;
             customers.splice(idx, 1);
             setTimeout(() => spawnCustomer(slot), getRespawnDelay(400));
         } else {
-            rating = Math.min(MAX_RATING, rating + 0.15);
+            // 【評判設定】提供成功（途中皿）時の評判加算 (+0.01)
+            rating = Math.min(MAX_RATING, rating + RATING_CONFIG.SUCCESS_EACH);
             c.eatingTimer = 1.5 + Math.random() * 2.5;
             c.patience = 100;
         }
     } else {
-        rating = Math.max(0, rating - 0.5);
+        // 【評判設定】誤提供（間違えた寿司）時の評判減少 (-0.5)
+        rating = Math.max(0, rating + RATING_CONFIG.MISS_SERVE);
         cuttingBoard = [];
         sfx.playError();
         if (rating <= 0) endGame();
@@ -1106,7 +1121,8 @@ function update(dt) {
 
         if (c.patience <= 0) {
             const slot = c.slot;
-            rating = Math.max(0, rating - 0.8);
+            // 【評判設定】タイムアウト（見逃し）時の評判減少 (-0.8)
+            rating = Math.max(0, rating + RATING_CONFIG.MISS_TIMEOUT);
             customers.splice(i, 1);
             sfx.playError();
 
@@ -1384,7 +1400,7 @@ function draw() {
             });
         }
 
-        // 「タイトルへ戻る」ボタン（文字中央揃えを明示）
+        // 「タイトルへ戻る」ボタン
         drawCard(ctx, 100, 745, 280, 60, '#1c3d5f');
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
         ctx.fillText('タイトルへ戻る', GAME_WIDTH/2, 783);
