@@ -1580,7 +1580,7 @@ function draw() {
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 17px serif'; ctx.fillText('ハイスコア', 320, 747);
 
         // Canvas描画によるアンダーライン付き外部リンクテキスト
-        const linkText = 'Produced by MRS GAMES 🌐';
+        const linkText = 'Produced by MRS GAMES';
         const linkX = GAME_WIDTH / 2;
         const linkY = 805;
 
@@ -1662,7 +1662,7 @@ function draw() {
         ctx.fillStyle = '#1c3d5f'; ctx.font = 'bold 18px serif'; ctx.textAlign = 'center';
         ctx.fillText('④ ネタ切れと仕入れ（補充）', GAME_WIDTH/2, r4Top + 20);
         ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(28,61,95,0.7)';
-        ctx.fillText('各ネタの最大在庫は10個（シャリ・わさび・海苔は無限）', GAME_WIDTH/2, r4Top + 36);
+        ctx.fillText('ネタは使用すると在庫が減る。', GAME_WIDTH/2, r4Top + 36);
 
         // ミニサンプルの描画
         ctx.save();
@@ -1680,7 +1680,7 @@ function draw() {
         ctx.restore();
 
         ctx.fillStyle = 'rgba(28,61,95,0.85)'; ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('使いたいネタのカードを【長押し（約0.8秒）】でいつでも補充可能！', GAME_WIDTH/2, r4Top + 120);
+        ctx.fillText('使いたいネタを長押しで補充可能！', GAME_WIDTH/2, r4Top + 120);
 
         drawCard(ctx, 100, 765, 280, 55, '#1c3d5f');
         ctx.fillStyle = '#f6ecd9'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center';
